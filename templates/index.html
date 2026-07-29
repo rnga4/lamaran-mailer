@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Kirim Email — Lamaran Mailer{% endblock %}
+{% block content %}
+
+{% if preview_mode %}
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+    <h2 class="text-base font-semibold">Preview Email</h2>
+  </div>
+  <div class="p-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-5">
+      <div>
+        <span class="text-claude-muted-light dark:text-claude-muted-dark text-xs uppercase tracking-wide">Ke</span>
+        <p class="mt-0.5">{{ preview.to }}</p>
+      </div>
+      <div>
+        <span class="text-claude-muted-light dark:text-claude-muted-dark text-xs uppercase tracking-wide">Perusahaan</span>
+        <p class="mt-0.5">{{ preview.company }}</p>
+      </div>
+      <div>
+        <span class="text-claude-muted-light dark:text-claude-muted-dark text-xs uppercase tracking-wide">Posisi</span>
+        <p class="mt-0.5">{{ preview.position }}</p>
+      </div>
+      <div>
+        <span class="text-claude-muted-light dark:text-claude-muted-dark text-xs uppercase tracking-wide">CV</span>
+        <p class="mt-0.5">{{ preview.cv_file }}</p>
+      </div>
+      <div>
+        <span class="text-claude-muted-light dark:text-claude-muted-dark text-xs uppercase tracking-wide">Akun Tersedia</span>
+        <div class="mt-0.5 space-y-0.5">
+          {% for acct in smtp_accounts %}
+          {% set rl = rate_limit.get(acct.key, {'used': 0, 'remaining': 30, 'max': 30, 'resets_in': 3600}) %}
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full {% if rl.remaining > 0 %}bg-green-500{% else %}bg-red-400{% endif %}"></span>
+            <span class="truncate">{{ acct.name }}</span>
+            <span class="text-claude-muted-light dark:text-claude-muted-dark">({{ rl.remaining }}/{{ rl.max }})</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-claude-bg-light dark:bg-claude-bg-dark rounded-xl border border-claude-border-light dark:border-claude-border-dark p-5 mb-5">
+      <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest mb-3 font-medium">Plain Text</p>
+      <pre class="whitespace-pre-wrap text-sm leading-relaxed">{{ preview.body }}</pre>
+    </div>
+
+    <div class="bg-white dark:bg-[#222] rounded-xl border border-claude-border-light dark:border-claude-border-dark p-5 mb-5">
+      <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest mb-3 font-medium">HTML Preview</p>
+      <div class="border border-claude-border-light dark:border-claude-border-dark rounded-lg overflow-hidden">
+        <iframe srcdoc="{{ preview.html_body | safe }}" class="w-full" style="min-height: 420px; border: none;" onload="this.style.height = this.contentDocument.body.scrollHeight + 40 + 'px'"></iframe>
+      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-3">
+      <form method="post" action="/send" data-loading class="flex-1">
+        <input type="hidden" name="to" value="{{ preview.to }}">
+        <input type="hidden" name="company" value="{{ preview.company }}">
+        <input type="hidden" name="position" value="{{ preview.position }}">
+        <input type="hidden" name="extra" value="{{ preview.extra }}">
+        <input type="hidden" name="cv_file" value="{{ preview.cv_file }}">
+        <button type="submit"
+          class="w-full sm:w-auto bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-2.5 px-6 rounded-xl transition text-sm">
+          Kirim Sekarang
+        </button>
+      </form>
+      <a href="/"
+        class="w-full sm:w-auto text-center border border-claude-border-light dark:border-claude-border-dark hover:border-claude-text-light/30 dark:hover:border-claude-text-dark/30 font-medium py-2.5 px-6 rounded-xl transition text-sm">
+        Kembali
+      </a>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+    <h2 class="text-base font-semibold">Kirim Email Lamaran</h2>
+    <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1">Isi data di bawah, lalu preview sebelum mengirim.</p>
+  </div>
+
+  {% if not smtp_ok %}
+  <div class="mx-6 mt-4 px-4 py-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
+    SMTP belum dikonfigurasi. Edit file <code class="bg-amber-100 dark:bg-amber-900/40 px-1 rounded text-xs">.env</code> lalu restart container.
+  </div>
+  {% endif %}
+
+  <form method="post" action="/preview" data-loading class="p-6 space-y-5">
+    <datalist id="companies"></datalist>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Email HRD</label>
+        <input type="email" name="to" required placeholder="hrd@perusahaan.com" value="{{ request.query_params.get('to', '') }}"
+          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm placeholder-claude-muted-light/50 dark:placeholder-claude-muted-dark/50 focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Nama Perusahaan</label>
+        <input type="text" name="company" required placeholder="PT Contoh Sejahtera" list="companies"
+          value="{{ request.query_params.get('company', '') }}"
+          oninput="companySearch(this.value, 'companies')"
+          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm placeholder-claude-muted-light/50 dark:placeholder-claude-muted-dark/50 focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition">
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Posisi</label>
+        <input type="text" name="position" value="{{ request.query_params.get('position', default_position) }}"
+          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">CV (PDF)</label>
+        {% if cv_files %}
+        <select name="cv_file"
+          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition appearance-none">
+          {% for f in cv_files %}
+          <option value="{{ f }}" {% if request.query_params.get('cv_file') == f or (not request.query_params.get('cv_file') and 'ID' in f) %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <p class="text-sm text-red-500 py-2.5">Tidak ada PDF. <a href="/cv" class="underline">Upload CV</a></p>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Kalimat Tambahan <span class="normal-case tracking-normal opacity-60">(opsional)</span></label>
+      <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..."
+        class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm placeholder-claude-muted-light/50 dark:placeholder-claude-muted-dark/50 focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition resize-none">{{ request.query_params.get('extra', '') }}</textarea>
+    </div>
+    <button type="submit"
+      class="w-full bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-3 rounded-xl transition text-sm">
+      Preview Email
+    </button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

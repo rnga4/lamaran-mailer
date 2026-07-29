@@ -1,0 +1,9 @@
+services:
+  mailer:
+    build: .
+    env_file: .env
+    ports:
+      - "8086:8000"
+    volumes:
+      - ./cv:/app/cv
+      - ./data:/app/data

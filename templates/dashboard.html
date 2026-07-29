@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Lamaran Mailer{% endblock %}
+{% block content %}
+
+<h1 class="text-base font-semibold mb-6">Dashboard</h1>
+
+<!-- Rate Limit Card -->
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
+    <h2 class="text-sm font-semibold">Per Akun SMTP</h2>
+  </div>
+  <div class="p-6 space-y-4">
+    {% for acct in smtp_accounts %}
+    {% set rl = rate_limit.get(acct.key, {'used': 0, 'remaining': 30, 'max': 30, 'resets_in': 3600}) %}
+    <div>
+      <div class="flex justify-between text-xs text-claude-muted-light dark:text-claude-muted-dark mb-1">
+        <span class="font-medium truncate mr-2">{{ acct.name }}</span>
+        <span class="tabular-nums">{{ rl.used }}/{{ rl.max }}</span>
+      </div>
+      <div class="w-full bg-claude-border-light dark:bg-claude-border-dark rounded-full h-2">
+        <div class="bg-claude-accent-light dark:bg-claude-accent-dark h-2 rounded-full transition-all" style="width: {{ (rl.used / (rl.max or 1) * 100) | int }}%"></div>
+      </div>
+      <div class="flex justify-between text-xs text-claude-muted-light dark:text-claude-muted-dark mt-0.5">
+        <span>Sisa {{ rl.remaining }}</span>
+        <span>Reset {{ rl.resets_in // 60 }}m {{ rl.resets_in % 60 }}s</span>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="pt-3 border-t border-claude-border-light dark:border-claude-border-dark">
+      <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark"><strong>Multi-Akun:</strong> Saat satu akun kena limit, sistem otomatis pindah ke akun berikutnya.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 md:mb-8">
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark p-5">
+    <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest font-medium">Total</p>
+    <p class="text-3xl font-bold mt-1 tabular-nums">{{ stats.total }}</p>
+  </div>
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark p-5">
+    <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest font-medium">Berhasil</p>
+    <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">{{ stats.sent }}</p>
+  </div>
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark p-5">
+    <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest font-medium">Gagal</p>
+    <p class="text-3xl font-bold text-red-500 dark:text-red-400 mt-1 tabular-nums">{{ stats.failed }}</p>
+  </div>
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark p-5">
+    <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest font-medium">Hari Ini</p>
+    <p class="text-3xl font-bold text-claude-accent-light dark:text-claude-accent-dark mt-1 tabular-nums">{{ stats.today }}</p>
+    <div class="mt-2 flex items-center gap-2">
+      <div class="flex-1 bg-claude-border-light dark:bg-claude-border-dark rounded-full h-1.5">
+        <div class="bg-amber-500 h-1.5 rounded-full transition-all" style="width: {{ (stats.today / (gmail_daily_limit or 1) * 100) | int }}%"></div>
+      </div>
+      <span class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark tabular-nums">{{ gmail_daily_limit - stats.today }} sisa</span>
+    </div>
+  </div>
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark p-5">
+    <p class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest font-medium">Perusahaan</p>
+    <p class="text-3xl font-bold mt-1 tabular-nums">{{ stats.unique_companies }}</p>
+  </div>
+</div>
+
+<div class="grid md:grid-cols-2 gap-4">
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark overflow-hidden">
+    <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+      <h2 class="text-sm font-semibold">Top Perusahaan</h2>
+    </div>
+    <div class="p-6">
+      {% if stats.by_company %}
+      <div class="space-y-3">
+        {% for c in stats.by_company %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm truncate">{{ c.company }}</span>
+          <span class="text-sm font-semibold ml-3 tabular-nums">{{ c.count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark">Belum ada data</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark overflow-hidden">
+    <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+      <h2 class="text-sm font-semibold">Per Posisi</h2>
+    </div>
+    <div class="p-6">
+      {% if stats.by_position %}
+      <div class="space-y-3">
+        {% for p in stats.by_position %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm">{{ p.position }}</span>
+          <span class="text-sm font-semibold tabular-nums">{{ p.count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark">Belum ada data</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark overflow-hidden">
+    <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+      <h2 class="text-sm font-semibold">Per Akun SMTP</h2>
+    </div>
+    <div class="p-6">
+      {% if stats.by_account %}
+      <div class="space-y-3">
+        {% for a in stats.by_account %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm truncate">{{ a.smtp_account or 'default' }}</span>
+          <span class="text-sm font-semibold tabular-nums">{{ a.count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark">Belum ada data</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark overflow-hidden md:col-span-2">
+    <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+      <h2 class="text-sm font-semibold">14 Hari Terakhir</h2>
+    </div>
+    <div class="p-6">
+      {% if stats.daily %}
+      <div class="flex items-end gap-1.5 h-36">
+        {% for d in stats.daily %}
+        <div class="flex-1 flex flex-col items-center">
+          <span class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark mb-1 tabular-nums">{{ d.count }}</span>
+          <div class="w-full bg-claude-accent-light/20 dark:bg-claude-accent-dark/20 rounded-t-md transition-all" style="height: {{ (d.count / (stats.daily_max or 1) * 100) | int }}%; min-height: 3px;"></div>
+          <span class="text-[9px] text-claude-muted-light dark:text-claude-muted-dark mt-1.5">{{ d.day[5:] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark">Belum ada data</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% block scripts %}
+<script>
+  let autoRefresh = true;
+  setInterval(function() {
+    if (!autoRefresh) return;
+    fetch('/api/companies')
+      .then(r => r.ok ? null : Promise.reject())
+      .catch(() => { autoRefresh = false; });
+  }, 30000);
+</script>
+{% endblock %}
+{% endblock %}

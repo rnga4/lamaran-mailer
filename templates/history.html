@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}History — Lamaran Mailer{% endblock %}
+{% block content_wrapper %}
+<div class="py-6 md:py-10 px-4 md:px-8">
+{% endblock %}
+{% block content %}
+
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
+    <h2 class="text-base font-semibold">History Email</h2>
+    <div class="flex items-center gap-2">
+      <a href="/history/export?search={{ search }}&status={{ status_filter }}&account={{ account_filter }}&date_from={{ date_from }}&date_to={{ date_to }}"
+        class="inline-flex items-center gap-1.5 text-xs text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-accent-light dark:hover:text-claude-accent-dark border border-claude-border-light dark:border-claude-border-dark px-3 py-1.5 rounded-lg transition">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export CSV
+      </a>
+      <form method="post" action="/history/clear" class="inline" data-confirm="Hapus semua history?">
+        <button type="submit"
+          class="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-lg transition">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Clear All
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark bg-claude-bg-light dark:bg-claude-bg-dark">
+    <form method="get" action="/history" class="flex flex-col sm:flex-wrap gap-3 items-end">
+      <div class="w-full sm:flex-1 sm:min-w-[200px]">
+        <label class="block text-[10px] uppercase tracking-widest text-claude-muted-light dark:text-claude-muted-dark mb-1">Search</label>
+        <input type="text" name="search" value="{{ search }}" placeholder="Email atau perusahaan..."
+          class="w-full bg-claude-card-light dark:bg-claude-card-dark border border-claude-border-light dark:border-claude-border-dark rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-claude-accent-light dark:focus:ring-claude-accent-dark transition">
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-widest text-claude-muted-light dark:text-claude-muted-dark mb-1">Status</label>
+        <select name="status"
+          class="bg-claude-card-light dark:bg-claude-card-dark border border-claude-border-light dark:border-claude-border-dark rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-claude-accent-light dark:focus:ring-claude-accent-dark transition appearance-none">
+          <option value="">Semua</option>
+          <option value="sent" {% if status_filter == 'sent' %}selected{% endif %}>Terkirim</option>
+          <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Gagal</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-widest text-claude-muted-light dark:text-claude-muted-dark mb-1">Akun</label>
+        <select name="account"
+          class="bg-claude-card-light dark:bg-claude-card-dark border border-claude-border-light dark:border-claude-border-dark rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-claude-accent-light dark:focus:ring-claude-accent-dark transition appearance-none">
+          <option value="">Semua</option>
+          {% for a in smtp_accounts_list %}
+          <option value="{{ a }}" {% if account_filter == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-widest text-claude-muted-light dark:text-claude-muted-dark mb-1">Dari</label>
+        <input type="date" name="date_from" value="{{ date_from }}"
+          class="bg-claude-card-light dark:bg-claude-card-dark border border-claude-border-light dark:border-claude-border-dark rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-claude-accent-light dark:focus:ring-claude-accent-dark transition">
+      </div>
+      <div>
+        <label class="block text-[10px] uppercase tracking-widest text-claude-muted-light dark:text-claude-muted-dark mb-1">Sampai</label>
+        <input type="date" name="date_to" value="{{ date_to }}"
+          class="bg-claude-card-light dark:bg-claude-card-dark border border-claude-border-light dark:border-claude-border-dark rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-claude-accent-light dark:focus:ring-claude-accent-dark transition">
+      </div>
+      <button type="submit" class="w-full sm:w-auto bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+        Filter
+      </button>
+      {% if search or status_filter or date_from or date_to %}
+      <a href="/history" class="text-xs text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-text-light dark:hover:text-claude-text-dark px-3 py-2 transition">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <form id="bulkForm" method="post" action="/history/bulk-delete">
+    <div class="px-4 py-2 border-b border-claude-border-light dark:border-claude-border-dark flex items-center gap-2 {% if not emails %}hidden{% endif %}">
+      <label class="flex items-center gap-2 text-xs text-claude-muted-light dark:text-claude-muted-dark cursor-pointer">
+        <input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)" class="rounded border-claude-border-light dark:border-claude-border-dark">
+        Pilih Semua
+      </label>
+      <button type="submit" id="bulkDeleteBtn" disabled
+        class="text-xs text-red-500 hover:text-red-600 border border-red-200 dark:border-red-800 px-3 py-1 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
+        Hapus Terpilih (<span id="selectedCount">0</span>)
+      </button>
+    </div>
+    <table class="w-full text-sm table-fixed">
+      <thead>
+        <tr class="border-b border-claude-border-light dark:border-claude-border-dark text-left">
+          <th class="px-4 py-3 w-8"></th>
+          <th class="px-4 py-3 w-[140px] text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Waktu</th>
+          <th class="px-4 py-3 w-[28%] text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Ke</th>
+          <th class="px-4 py-3 w-[22%] text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Perusahaan</th>
+          <th class="px-4 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Posisi</th>
+          <th class="px-4 py-3 w-[100px] text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Status</th>
+          <th class="px-4 py-3 w-[120px] text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Akun</th>
+          <th class="px-4 py-3 w-[80px] text-xs font-medium uppercase tracking-wide"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr class="border-b border-claude-border-light/50 dark:border-claude-border-dark/50 hover:bg-claude-bg-light/50 dark:hover:bg-claude-bg-dark/50 transition">
+          <td class="px-4 py-3"><input type="checkbox" name="selected" value="{{ e.id }}" onchange="updateBulkBtn()" class="rounded border-claude-border-light dark:border-claude-border-dark"></td>
+          <td class="px-4 py-3 text-claude-muted-light dark:text-claude-muted-dark whitespace-nowrap text-xs">{{ e.created_at_fmt }}</td>
+          <td class="px-4 py-3 truncate" title="{{ e.to_addr }}">{{ e.to_addr }}</td>
+          <td class="px-4 py-3 truncate" title="{{ e.company }}">{{ e.company }}</td>
+          <td class="px-4 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs truncate" title="{{ e.position }}">{{ e.position }}</td>
+          <td class="px-4 py-3">
+            {% if e.status == 'sent' %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">Terkirim</span>
+            {% else %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" title="{{ e.error }}">Gagal</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs text-claude-muted-light dark:text-claude-muted-dark truncate" title="{{ e.smtp_account }}">{{ e.smtp_account or '-' }}</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-1">
+              {% if e.status == 'failed' %}
+              <form method="post" action="/history/retry/{{ e.id }}" class="inline">
+                <button type="submit" title="Kirim ulang"
+                  class="text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-accent-light dark:hover:text-claude-accent-dark transition p-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+              </form>
+              {% endif %}
+              <form method="post" action="/history/delete/{{ e.id }}" class="inline" data-confirm="Hapus entry ini?">
+                <button type="submit"
+                  class="text-claude-muted-light dark:text-claude-muted-dark hover:text-red-500 transition p-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not emails %}
+        <tr>
+          <td colspan="8" class="px-6 py-12 text-center text-claude-muted-light dark:text-claude-muted-dark text-sm">
+            <svg class="w-8 h-8 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+            <p class="text-claude-muted-light dark:text-claude-muted-dark">Belum ada history pengiriman.</p>
+            <a href="/" class="text-claude-accent-light dark:text-claude-accent-dark hover:underline text-xs mt-2 inline-block">Kirim email pertama sekarang</a>
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <input type="hidden" name="ids" id="selectedIds">
+  </form>
+
+  {% if total_pages > 1 %}
+  <div class="px-6 py-3 border-t border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
+    <span class="text-xs text-claude-muted-light dark:text-claude-muted-dark">{{ total }} total &middot; Halaman {{ page }}/{{ total_pages }}</span>
+    <div class="flex gap-1.5">
+      {% if page > 1 %}
+      <a href="?page={{ page - 1 }}&search={{ search }}&status={{ status_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="px-3 py-1.5 text-xs border border-claude-border-light dark:border-claude-border-dark rounded-lg hover:bg-claude-bg-light dark:hover:bg-claude-bg-dark transition">Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a href="?page={{ page + 1 }}&search={{ search }}&status={{ status_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="px-3 py-1.5 text-xs border border-claude-border-light dark:border-claude-border-dark rounded-lg hover:bg-claude-bg-light dark:hover:bg-claude-bg-dark transition">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+function toggleAll(checked) {
+  document.querySelectorAll('input[name="selected"]').forEach(cb => cb.checked = checked);
+  updateBulkBtn();
+}
+
+function updateBulkBtn() {
+  const checked = document.querySelectorAll('input[name="selected"]:checked').length;
+  document.getElementById('selectedCount').textContent = checked;
+  document.getElementById('bulkDeleteBtn').disabled = checked === 0;
+}
+
+document.getElementById('bulkForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const checked = document.querySelectorAll('input[name="selected"]:checked');
+  if (!checked.length) return;
+  const ids = Array.from(checked).map(cb => cb.value).join(',');
+  document.getElementById('selectedIds').value = ids;
+  showModal('Hapus ' + checked.length + ' entry yang dipilih?', 'Hapus', function() {
+    document.getElementById('bulkForm').submit();
+  });
+});
+</script>
+{% endblock %}
+{% endblock %}

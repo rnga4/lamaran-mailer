@@ -41,8 +41,9 @@ MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
 
 CSV_CACHE_TTL = 3600
 
-_batch_locks: dict[int, Any] = {}
 _batch_csv_cache: dict[str, dict[str, Any]] = {}
+_batch_job_data: dict[int, dict[str, Any]] = {}
+_batch_wake = threading.Event()
 _smtp_index: int = 0
 _smtp_lock = threading.Lock()
 
@@ -160,6 +161,9 @@ def _try_send_with_failover(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    db.fail_stale_running_jobs()
+    worker = threading.Thread(target=_batch_worker, daemon=True)
+    worker.start()
     yield
 
 
@@ -229,6 +233,29 @@ def _clean_csv_cache() -> None:
     expired = [k for k, v in _batch_csv_cache.items() if now - v["created_at"] > CSV_CACHE_TTL]
     for k in expired:
         _batch_csv_cache.pop(k, None)
+
+
+def _decode_csv_bytes(content: bytes) -> str:
+    for enc in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return content.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace")
+
+
+def _detect_delimiter(text: str) -> str:
+    first_line = text.split("\n", 1)[0]
+    candidates = {d: first_line.count(d) for d in (";", ",", "\t", "|")}
+    best = max(candidates, key=candidates.get)
+    return best if candidates[best] > 0 else ","
+
+
+def _row_field(row: dict[str, Any], header_map: dict[str, str], name: str) -> str:
+    actual = header_map.get(name)
+    if actual:
+        return row.get(actual) or ""
+    return row.get(name) or ""
 
 
 # ────────────────────────── Health ──────────────────────────
@@ -402,6 +429,7 @@ def batch_page(
         if active_jobs:
             job_id = active_jobs[0]["id"]
             job = active_jobs[0]
+    queued_jobs = db.get_queued_batch_jobs()
     batch_history = db.get_batch_jobs(limit=10)
     return templates.TemplateResponse(
         request, "batch.html",
@@ -412,6 +440,7 @@ def batch_page(
             job=job,
             job_id=job_id,
             active_jobs=active_jobs,
+            queued_jobs=queued_jobs,
             batch_history=batch_history,
             now=time.time(),
         ),
@@ -438,8 +467,15 @@ async def batch_preview(
             status_code=303,
         )
 
-    text = content.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
+    text = _decode_csv_bytes(content)
+    reader = csv.DictReader(io.StringIO(text), delimiter=_detect_delimiter(text))
+    header_map: dict[str, str] = {}
+    if reader.fieldnames:
+        header_map = {
+            fn.strip().lower(): fn
+            for fn in reader.fieldnames
+            if fn and fn.strip()
+        }
 
     rows: list[dict[str, Any]] = []
     invalid_rows: list[dict[str, Any]] = []
@@ -447,8 +483,8 @@ async def batch_preview(
     prev_sent_rows: list[dict[str, Any]] = []
     seen_companies: set[str] = set()
     for i, row in enumerate(reader, 1):
-        email_val = row.get("email", "").strip()
-        company_val = row.get("company", row.get("nama_pt", "")).strip()
+        email_val = _row_field(row, header_map, "email").strip()
+        company_val = (_row_field(row, header_map, "company") or _row_field(row, header_map, "nama_pt")).strip()
         if not email_val or not company_val:
             continue
         if not is_valid_email(email_val):
@@ -464,6 +500,18 @@ async def batch_preview(
             continue
         rows.append({"email": email_val, "company": company_val, "row": i})
 
+    if not rows:
+        if prev_sent_rows:
+            msg = "Semua+email+sudah+pernah+dikirim+ke+perusahaan+tersebut,+tidak+ada+baris+baru."
+        elif invalid_rows:
+            msg = "Tidak+ada+baris+email+valid.+Periksa+format+email+di+CSV."
+        else:
+            msg = "Tidak+ada+baris+data+ditemukan.+Pastikan+kolom+%27email%27+dan+%27company%27+(atau+%27nama_pt%27)+ada+di+baris+header."
+        return RedirectResponse(
+            url=f"/batch?message={msg}&msg_type=error",
+            status_code=303,
+        )
+
     # store rows server-side, pass cache_key instead of raw data
     cache_key = str(uuid.uuid4())
     _batch_csv_cache[cache_key] = {
@@ -471,6 +519,7 @@ async def batch_preview(
         "cv_file": cv_file,
         "position": position,
         "extra": extra,
+        "filename": file.filename or "",
         "created_at": time.time(),
     }
     _clean_csv_cache()
@@ -505,6 +554,7 @@ def batch_send(
     cv_file: str = data["cv_file"]
     position: str = data["position"]
     extra: str = data["extra"]
+    filename: str = data.get("filename", "")
 
     try:
         safe_cv = _sanitize_filename(cv_file)
@@ -522,97 +572,128 @@ def batch_send(
         )
 
     total = len(rows)
-    job_id = db.create_batch_job(total)
+    job_id = db.create_batch_job(total, filename=filename)
+    _batch_job_data[job_id] = {
+        "rows": rows,
+        "position": position,
+        "extra": extra,
+        "safe_cv": safe_cv,
+        "cv_path": cv_path,
+    }
+    _batch_wake.set()
 
-    def _run_batch() -> None:
-        results: dict[str, int] = {"success": 0, "failed": 0, "rate_limited": 0}
-        last_error = ""
-        template_names = db.get_template_names()
-        lock = _batch_locks.get(job_id)
-        if lock:
-            lock.acquire()
-        try:
-            for row in rows:
-                # Cek cancel
-                current = db.get_batch_job(job_id)
-                if current and current["status"] == "cancelled":
-                    last_error = "Dibatalkan pengguna"
-                    db.update_batch_job(job_id,
-                        sent=results["success"],
-                        failed=results["failed"],
-                        rate_limited=results["rate_limited"],
-                        last_error=last_error,
-                    )
-                    break
+    return RedirectResponse(
+        url=f"/batch?job_id={job_id}",
+        status_code=303,
+    )
 
-                email_val = row["email"]
-                company_val = row["company"]
 
-                tpl_name = random.choice(template_names) if template_names else "html"
+def _run_batch(job_id: int, data: dict[str, Any]) -> None:
+    rows: list[dict[str, Any]] = data["rows"]
+    position: str = data["position"]
+    extra: str = data["extra"]
+    safe_cv: str = data["safe_cv"]
+    cv_path: str = data["cv_path"]
+    total = len(rows)
 
-                try:
-                    success, key, err = _try_send_with_failover(email_val, company_val, position, extra, cv_path, template_name=tpl_name)
-                except FileNotFoundError as e:
-                    results["failed"] += 1
-                    last_error = str(e)
-                    db.update_batch_job(job_id,
-                        sent=results["success"],
-                        failed=results["failed"],
-                        rate_limited=results["rate_limited"],
-                        last_error=last_error,
-                    )
-                    continue
-
-                if success:
-                    db.log_email(email_val, company_val, position, extra, safe_cv, "sent", smtp_account=key)
-                    results["success"] += 1
-                else:
-                    if "rate limit" in err.lower():
-                        results["rate_limited"] += 1
-                    else:
-                        results["failed"] += 1
-                    last_error = err
-
+    results: dict[str, int] = {"success": 0, "failed": 0, "rate_limited": 0}
+    last_error = ""
+    template_names = db.get_template_names()
+    db.update_batch_job(job_id, status="running", last_error="")
+    try:
+        for row in rows:
+            # Cek cancel
+            current = db.get_batch_job(job_id)
+            if current and current["status"] == "cancelled":
+                last_error = "Dibatalkan pengguna"
                 db.update_batch_job(job_id,
                     sent=results["success"],
                     failed=results["failed"],
                     rate_limited=results["rate_limited"],
                     last_error=last_error,
                 )
-                if SPREAD_HOURS > 0 and total > 1:
-                    spread_sec = SPREAD_HOURS * 3600
-                    avg_delay = spread_sec / total
-                    delay = avg_delay * random.uniform(0.7, 1.3)
+                break
+
+            email_val = row["email"]
+            company_val = row["company"]
+
+            tpl_name = random.choice(template_names) if template_names else "html"
+
+            try:
+                success, key, err = _try_send_with_failover(email_val, company_val, position, extra, cv_path, template_name=tpl_name)
+            except FileNotFoundError as e:
+                results["failed"] += 1
+                last_error = str(e)
+                db.update_batch_job(job_id,
+                    sent=results["success"],
+                    failed=results["failed"],
+                    rate_limited=results["rate_limited"],
+                    last_error=last_error,
+                )
+                continue
+
+            if success:
+                db.log_email(email_val, company_val, position, extra, safe_cv, "sent", smtp_account=key)
+                results["success"] += 1
+            else:
+                if "rate limit" in err.lower():
+                    results["rate_limited"] += 1
                 else:
-                    delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
-                time.sleep(delay)
+                    results["failed"] += 1
+                last_error = err
 
-            db.update_batch_job(job_id, status="done",
+            db.update_batch_job(job_id,
                 sent=results["success"],
                 failed=results["failed"],
                 rate_limited=results["rate_limited"],
                 last_error=last_error,
             )
-        except Exception as e:
-            last_error = f"Kesalahan sistem: {e}"
-            db.update_batch_job(job_id, status="failed",
-                sent=results["success"],
-                failed=results["failed"],
-                rate_limited=results["rate_limited"],
-                last_error=last_error,
-            )
-        finally:
-            if lock:
-                lock.release()
+            if SPREAD_HOURS > 0 and total > 1:
+                spread_sec = SPREAD_HOURS * 3600
+                avg_delay = spread_sec / total
+                delay = avg_delay * random.uniform(0.7, 1.3)
+            else:
+                delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
+            time.sleep(delay)
 
-    _batch_locks[job_id] = threading.Lock()
-    thread = threading.Thread(target=_run_batch, daemon=True)
-    thread.start()
+        db.update_batch_job(job_id, status="done",
+            sent=results["success"],
+            failed=results["failed"],
+            rate_limited=results["rate_limited"],
+            last_error=last_error,
+        )
+    except Exception as e:
+        last_error = f"Kesalahan sistem: {e}"
+        db.update_batch_job(job_id, status="failed",
+            sent=results["success"],
+            failed=results["failed"],
+            rate_limited=results["rate_limited"],
+            last_error=last_error,
+        )
 
-    return RedirectResponse(
-        url=f"/batch?job_id={job_id}",
-        status_code=303,
-    )
+
+def _batch_worker() -> None:
+    while True:
+        queued = db.get_queued_batch_jobs()
+        if not queued:
+            _batch_wake.wait(timeout=5)
+            _batch_wake.clear()
+            continue
+        job_id = queued[0]["id"]
+        data = _batch_job_data.pop(job_id, None)
+        if data is None:
+            for _ in range(20):
+                time.sleep(0.05)
+                data = _batch_job_data.pop(job_id, None)
+                if data is not None:
+                    break
+        if data is None:
+            db.update_batch_job(job_id, status="failed", last_error="Data batch tidak ditemukan")
+            continue
+        current = db.get_batch_job(job_id)
+        if current and current["status"] == "cancelled":
+            continue
+        _run_batch(job_id, data)
 
 
 @dataclass

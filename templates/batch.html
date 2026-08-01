@@ -12,8 +12,55 @@
 
 {% if active_jobs and active_jobs|length > 1 %}
 <div class="mb-6 px-4 py-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
-  {{ active_jobs|length }} batch sedang berjalan. Menampilkan progress yang terbaru.
+  {{ active_jobs|length }} batch aktif (berjalan/menunggu). Menampilkan progress yang terbaru.
 </div>
+{% endif %}
+
+{% if job and job.status == 'queued' %}
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
+    <h2 class="text-base font-semibold">Batch #{{ job.id }} Menunggu Antrian</h2>
+    <span class="text-xs text-claude-muted-light dark:text-claude-muted-dark">{% if job.filename %}{{ job.filename }}{% endif %}</span>
+  </div>
+  <div class="p-6">
+    <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark mb-4">Batch ini akan mulai otomatis setelah batch sebelumnya selesai. Total <span class="font-medium tabular-nums">{{ job.total }}</span> email.</p>
+    <div class="flex justify-end">
+      <button id="cancelBtn" onclick="cancelBatch({{ job.id }})"
+        class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-medium py-2 px-5 rounded-xl transition text-sm">
+        Batalkan
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+  (function() {
+    const jobId = {{ job.id }};
+    const es = new EventSource('/api/batch-progress/' + jobId + '/stream');
+    es.onmessage = function(event) {
+      const job = JSON.parse(event.data);
+      if (!job || job.error) return;
+      if (job.status === 'running') { es.close(); window.location.reload(); }
+      if (job.status === 'done' || job.status === 'cancelled' || job.status === 'failed') {
+        es.close();
+        window.location.href = '/batch?job_id=' + jobId;
+      }
+    };
+    es.addEventListener('error', function() { es.close(); });
+  })();
+
+  function cancelBatch(jobId) {
+    if (!confirm('Yakin mau batalkan batch #' + jobId + '?')) return;
+    document.getElementById('cancelBtn').disabled = true;
+    document.getElementById('cancelBtn').textContent = 'Membatalkan...';
+    fetch('/api/batch/cancel', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: jobId}),
+    }).then(function() {
+      document.getElementById('cancelBtn').textContent = 'Dibatalkan';
+    });
+  }
+</script>
 {% endif %}
 
 {% if job and job.status == 'running' %}
@@ -106,6 +153,48 @@
 </script>
 {% endif %}
 
+{% if queued_jobs %}
+<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
+    <h2 class="text-base font-semibold">Antrian Batch ({{ queued_jobs|length }})</h2>
+    <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1">Batch di bawah akan diproses 1-per-1 setelah batch yang berjalan selesai.</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead><tr class="border-b border-claude-border-light dark:border-claude-border-dark text-left">
+        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">#</th>
+        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">File</th>
+        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Email</th>
+        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Status</th>
+        <th class="px-6 py-3 text-right"></th>
+      </tr></thead>
+      <tbody>
+        {% for qj in queued_jobs %}
+        {% if not job_id or qj.id != job_id %}
+        <tr class="border-b border-claude-border-light/50 dark:border-claude-border-dark/50">
+          <td class="px-6 py-3 text-xs font-mono">#{{ qj.id }}</td>
+          <td class="px-6 py-3 text-xs">{% if qj.filename %}{{ qj.filename }}{% else %}CSV{% endif %}</td>
+          <td class="px-6 py-3 text-xs tabular-nums">{{ qj.total }}</td>
+          <td class="px-6 py-3 text-xs text-amber-600 dark:text-amber-400">
+            <span class="inline-flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Menunggu
+            </span>
+          </td>
+          <td class="px-6 py-3 text-right">
+            <form method="post" action="/batch/cancel/{{ qj.id }}" style="display:inline">
+              <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ qj.id }}?')"
+                class="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline">Batalkan</button>
+            </form>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% if job_id and job and job.status == 'done' %}
 <div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
   <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
@@ -162,6 +251,10 @@
             <span class="text-xs text-emerald-600 dark:text-emerald-400">
               {% if bj.failed == 0 and bj.rate_limited == 0 %}Selesai{% else %}Selesai (dengan error){% endif %}
             </span>
+            {% elif bj.status == 'queued' %}
+            <span class="inline-flex items-center gap-1 text-xs text-sky-600 dark:text-sky-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Menunggu
+            </span>
             {% elif bj.status == 'cancelled' %}
             <span class="text-xs text-red-500 dark:text-red-400">Dibatalkan</span>
             {% endif %}
@@ -174,7 +267,7 @@
             {% if ago < 1 %}baru saja{% elif ago < 60 %}{{ ago }}m{% else %}{{ ago // 60 }}j{% endif %}
           </td>
           <td class="px-6 py-3 text-right">
-            {% if bj.status == 'running' %}
+            {% if bj.status in ('running', 'queued') %}
             <form method="post" action="/batch/cancel/{{ bj.id }}" style="display:inline">
               <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ bj.id }}?')"
                 class="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline">Batalkan</button>

@@ -85,6 +85,11 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if "smtp_account" not in cols:
         conn.execute("ALTER TABLE emails ADD COLUMN smtp_account TEXT DEFAULT ''")
 
+    # Add filename column to batch_jobs if missing (legacy DBs)
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(batch_jobs)").fetchall()]
+    if "filename" not in cols:
+        conn.execute("ALTER TABLE batch_jobs ADD COLUMN filename TEXT DEFAULT ''")
+
     # Migrate old rate_limit (with id PK) to new per-account format (account_key PK)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(rate_limit)").fetchall()]
     if "account_key" not in cols:
@@ -532,12 +537,12 @@ def delete_template(name: str) -> None:
     conn.close()
 
 
-def create_batch_job(total: int) -> int:
+def create_batch_job(total: int, filename: str = "") -> int:
     _ensure_db()
     conn = _conn()
     cur = conn.execute(
-        "INSERT INTO batch_jobs (total, sent, failed, rate_limited, status, created_at) VALUES (?, 0, 0, 0, 'running', ?)",
-        (total, time.time()),
+        "INSERT INTO batch_jobs (total, sent, failed, rate_limited, status, filename, created_at) VALUES (?, 0, 0, 0, 'queued', ?, ?)",
+        (total, filename, time.time()),
     )
     job_id = cur.lastrowid
     conn.commit()
@@ -572,7 +577,7 @@ def get_batch_job(job_id: int) -> Optional[dict[str, Any]]:
 def cancel_batch_job(job_id: int) -> None:
     _ensure_db()
     conn = _conn()
-    conn.execute("UPDATE batch_jobs SET status='cancelled' WHERE id=? AND status='running'", (job_id,))
+    conn.execute("UPDATE batch_jobs SET status='cancelled' WHERE id=? AND status IN ('running', 'queued')", (job_id,))
     conn.commit()
     conn.close()
 
@@ -591,6 +596,28 @@ def get_batch_jobs(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
 def get_active_batch_jobs() -> list[dict[str, Any]]:
     _ensure_db()
     conn = _conn()
-    rows = conn.execute("SELECT * FROM batch_jobs WHERE status='running' ORDER BY created_at DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM batch_jobs WHERE status IN ('running', 'queued') ORDER BY created_at ASC"
+    ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+
+def get_queued_batch_jobs() -> list[dict[str, Any]]:
+    _ensure_db()
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT * FROM batch_jobs WHERE status='queued' ORDER BY created_at ASC"
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def fail_stale_running_jobs() -> None:
+    _ensure_db()
+    conn = _conn()
+    conn.execute(
+        "UPDATE batch_jobs SET status='failed', last_error='Server restart, batch dibatalkan' WHERE status='running'"
+    )
+    conn.commit()
+    conn.close()

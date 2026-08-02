@@ -1,3 +1,4 @@
+import os
 import random
 import re
 import smtplib
@@ -24,10 +25,10 @@ GREETING_VARIANTS = [
 ]
 
 OPENING_VARIANTS = [
-    "Perkenalkan, saya Nama Anda. Melalui email ini saya bermaksud melamar untuk posisi {position} di {company}.",
-    "Dengan hormat, saya Nama Anda mengajukan lamaran untuk posisi {position} yang saat ini tersedia di {company}.",
-    "Saya Nama Anda, bermaksud mengajukan diri untuk mengisi posisi {position} di {company}.",
-    "Melalui surat elektronik ini, saya Nama Anda menyampaikan minat dan lamaran saya untuk posisi {position} di {company}.",
+    "Perkenalkan, saya {sender_name}. Melalui email ini saya bermaksud melamar untuk posisi {position} di {company}.",
+    "Dengan hormat, saya {sender_name} mengajukan lamaran untuk posisi {position} yang saat ini tersedia di {company}.",
+    "Saya {sender_name}, bermaksud mengajukan diri untuk mengisi posisi {position} di {company}.",
+    "Melalui surat elektronik ini, saya {sender_name} menyampaikan minat dan lamaran saya untuk posisi {position} di {company}.",
 ]
 
 CLOSING_VARIANTS = [
@@ -42,17 +43,17 @@ BODY_TEMPLATE = """{greeting}
 
 {opening}
 
-Saat ini saya bekerja sebagai IT Support / System Administrator di PT. Contoh Sejahtera, dengan pengalaman mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}
+Saya berpengalaman sebagai IT Support / System Administrator dengan keahlian mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}
 
 Bersama email ini saya lampirkan CV dan dokumen pendukung lainnya untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.
 
 {closing}
 
 Hormat saya,
-Nama Anda
-08XX-XXXX-XXXX
-email.anda@gmail.com
-linkedin.com/in/username
+{sender_name}
+{sender_phone}
+{sender_email}
+{sender_linkedin}
 """
 
 HTML_TEMPLATE = """\
@@ -89,7 +90,7 @@ HTML_TEMPLATE = """\
 
 <p>{opening}</p>
 
-<p>Saat ini saya bekerja sebagai IT Support / System Administrator di PT. Contoh Sejahtera, dengan pengalaman mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}</p>
+<p>Saya berpengalaman sebagai IT Support / System Administrator dengan keahlian mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}</p>
 
 <p>Bersama email ini saya lampirkan CV dan dokumen pendukung lainnya untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
 
@@ -98,11 +99,11 @@ HTML_TEMPLATE = """\
 <div class="divider"></div>
 
 <div class="signature">
-  <p><strong>Hormat saya,</strong><br>Nama Anda</p>
+  <p><strong>Hormat saya,</strong><br>{sender_name}</p>
   <div class="contact-buttons">
-    <a href="https://wa.me/628XXXXXXXXXX" class="btn-wa">WhatsApp</a>
-    <a href="mailto:email.anda@gmail.com" class="btn-email">Email</a>
-    <a href="https://www.linkedin.com/in/username/" class="btn-linkedin">LinkedIn</a>
+    <a href="{wa_link}" class="btn-wa">WhatsApp</a>
+    <a href="mailto:{sender_email}" class="btn-email">Email</a>
+    <a href="{linkedin_url}" class="btn-linkedin">LinkedIn</a>
   </div>
 </div>
 </body>
@@ -158,10 +159,24 @@ def render_body(
     is_default = tpl in (get_template("plain"), get_template("html"))
     extra_vars = {}
     if is_default:
+        sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
+        sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
+        sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
+        sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
+        wa_link = "https://wa.me/" + re.sub(r"\D", "", sender_phone)
+        linkedin_url = "https://" + sender_linkedin.lstrip("https://")
         extra_vars = {
             "greeting": random.choice(GREETING_VARIANTS),
-            "opening": random.choice(OPENING_VARIANTS).format(position=position, company=company),
+            "opening": random.choice(OPENING_VARIANTS).format(
+                sender_name=sender_name, position=position, company=company
+            ),
             "closing": random.choice(CLOSING_VARIANTS).format(company=company),
+            "sender_name": sender_name,
+            "sender_phone": sender_phone,
+            "sender_email": sender_email,
+            "sender_linkedin": sender_linkedin,
+            "wa_link": wa_link,
+            "linkedin_url": linkedin_url,
         }
     try:
         return tpl.format(company=company, position=position, extra=extra_text, **extra_vars)
@@ -177,7 +192,7 @@ def render_body(
         raise ValueError(
             f"Template menggunakan variabel {e} yang tidak dikenal. "
             "Variabel yang tersedia: company, position, extra" +
-            (", greeting, opening, closing" if is_default else "")
+            (", greeting, opening, closing, sender_name, sender_phone, sender_email, sender_linkedin, wa_link, linkedin_url" if is_default else "")
         )
 
 

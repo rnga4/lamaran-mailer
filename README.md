@@ -59,4 +59,4 @@ docker compose run --rm mailer python send_application.py \
 ## Catatan
 
 - Jangan commit `.env` ke git — berisi App Password.
-- Subject email selalu: `Lamaran Kerja – Nama Anda`
+- Subject email selalu: `Lamaran Kerja – {Nama Posisi}`

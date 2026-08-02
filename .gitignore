@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 venv/
 /data/
+cv/*.pdf
+cv/*.csv

@@ -76,4 +76,4 @@ Runs on `http://localhost:8086`
 - `.env` is gitignored — contains SMTP passwords (use App Passwords for Gmail)
 - `data/` is gitignored — SQLite DB with email history
 - Default position: "IT Support / DevOps"
-- Default sender name: "Nama Anda"
+- Default sender name: set via `SMTP_FROM_NAME` env var (lihat `.env.example`)

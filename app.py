@@ -827,10 +827,11 @@ def history_retry(email_id: int):
 def history_export(
     search: str = "",
     status: str = "",
+    account: str = "",
     date_from: str = "",
     date_to: str = "",
 ):
-    csv_data = db.export_emails_csv(search=search, status_filter=status, date_from=date_from, date_to=date_to)
+    csv_data = db.export_emails_csv(search=search, status_filter=status, account_filter=account, date_from=date_from, date_to=date_to)
     return StreamingResponse(
         io.BytesIO(csv_data.encode("utf-8-sig")),
         media_type="text/csv",

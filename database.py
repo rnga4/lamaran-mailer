@@ -280,6 +280,7 @@ def export_emails_csv(
     status_filter: str = "",
     date_from: str = "",
     date_to: str = "",
+    account_filter: str = "",
 ) -> str:
     _ensure_db()
     conn = _conn()
@@ -292,6 +293,9 @@ def export_emails_csv(
     if status_filter:
         query += " AND status = ?"
         params.append(status_filter)
+    if account_filter:
+        query += " AND smtp_account = ?"
+        params.append(account_filter)
     if date_from:
         query += " AND datetime(created_at, 'unixepoch', 'localtime') >= ?"
         params.append(date_from)
@@ -310,8 +314,8 @@ def export_emails_csv(
         writer.writerow([
             e["id"], e["created_at_fmt"], e["to_addr"], e["company"],
             e["position"], e["cv_file"], e["status"],
-            e.get("error", "") or "",
-            e.get("smtp_account", "") or "",
+            e["error"] or "",
+            e["smtp_account"] or "",
         ])
     return output.getvalue()
 

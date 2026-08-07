@@ -159,7 +159,7 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 - **Tema**: jangan tulis `localStorage.getItem('lm-theme') || 'dark'` — string kosong itu tema Light yang VALID; dan jangan masukkan `''` ke array THEMES (`classList.remove('')` melempar SyntaxError)
 - **`wa.me` harus format internasional** — nomor diawali `0` otomatis diganti `62`
 - **Jangan timpa status batch** — setelah `pause/cancel`, jangan `update_batch_job(status='done')` (bug lama: cancel malah jadi done)
-- Duplikat CSS: `pl-komatsu-ui-template.css` di **root proyek** adalah salinan usang — yang dipakai hanya `static/pl-komatsu-ui-template.css` (lihat TODO)
+- CSS tema: hanya `static/pl-komatsu-ui-template.css` yang dipakai (diload via `/assets/` di `base.html`)
 - `.env`, `data/`, `cv/*.pdf` di-gitignore; jangan commit App Password
 
 ---
@@ -194,5 +194,5 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 - Sudah ada, jangan dibikin ulang: Export CSV riwayat (`/history/export`), proteksi login (`APP_PASSWORD`), anti-duplikat email, backup DB otomatis
 
 ### TODO kecil / cleanup
-- Hapus `pl-komatsu-ui-template.css` duplikat di **root proyek** (yang dipakai: `static/`); cek dulu tidak ada referensi
-- Pastikan `.env.example` sinkron dengan env vars baru (SENDER_GITHUB sudah ditambahkan)
+- (done) Duplikat `pl-komatsu-ui-template.css` di root proyek sudah dihapus
+- (done) `.env.example` sudah sinkron (SENDER_GITHUB ditambahkan)

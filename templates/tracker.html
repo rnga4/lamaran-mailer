@@ -41,16 +41,6 @@
     background: var(--card); border: 1px solid var(--border);
     border-radius: 99px; padding: 0 7px; color: var(--muted-foreground);
   }
-  .tcol-search {
-    width: 100%; box-sizing: border-box;
-    font-size: 0.68rem; padding: 5px 9px; margin-bottom: 7px;
-    border: 1px solid var(--border); border-radius: 6px;
-    background: var(--card); color: var(--foreground);
-    outline: none; transition: border-color 0.15s;
-    flex-shrink: 0;
-  }
-  .tcol-search:focus { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 18%, transparent); }
-  .tcol-search::placeholder { color: var(--muted-foreground); }
   .tcol-body {
     display: flex; flex-direction: column; gap: 6px;
     overflow-y: auto;
@@ -61,8 +51,38 @@
   .tcol-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
   .tcol-body::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
   .tcard.filtered-out { display: none; }
-  .tcol-empty { display: none; font-size: 0.66rem; color: var(--muted-foreground); text-align: center; padding: 12px 4px; flex-shrink: 0; }
-  .tcol-empty.show { display: block; }
+
+  /* Search global (semua kolom) */
+  .tracker-search {
+    width: 100%; box-sizing: border-box;
+    font-size: 0.78rem; padding: 8px 12px; margin: 8px 0 0;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--foreground);
+    outline: none; transition: border-color 0.15s;
+  }
+  .tracker-search:focus { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 18%, transparent); }
+  .tracker-empty { display: none; margin: 10px 0 0; }
+  .tracker-empty.show { display: block; }
+
+  /* Menu ubah tahap (fallback sentuh / tap) */
+  .stage-menu {
+    display: none; position: fixed; z-index: 120; min-width: 172px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    padding: 6px;
+  }
+  .stage-menu.show { display: block; }
+  .stage-menu-title {
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted-foreground); padding: 4px 8px 6px;
+  }
+  .stage-menu-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px;
+    border: none; background: transparent; color: var(--foreground);
+    font-size: 0.8rem; border-radius: 6px; cursor: pointer; text-align: left;
+  }
+  .stage-menu-item:hover { background: var(--muted); }
+  .stage-menu-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .tcard {
     background: var(--card);
     border: 1px solid var(--border);
@@ -98,8 +118,11 @@
     <div class="section-title" style="font-size: 1.15rem;">Tracker Lamaran</div>
     <span class="chip done" style="font-size: 0.66rem;">{{ total_apps }} lamaran</span>
   </div>
-  <span class="muted" style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Geser kartu antar kolom untuk mengubah tahap">Geser kartu antar kolom untuk mengubah tahap</span>
+  <span class="muted" style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Geser (desktop) / ketuk (HP) kartu untuk mengubah tahap">Geser / ketuk kartu untuk ubah tahap</span>
 </div>
+
+<input type="text" class="tracker-search" id="globalSearch" placeholder="Cari di semua kolom — perusahaan, posisi, atau email…" oninput="onGlobalSearch(this)">
+<div class="notice info tracker-empty" id="globalEmpty"></div>
 
 {% if not applications %}
 <div class="card">
@@ -149,6 +172,16 @@
 <div class="notice info" style="margin-bottom: 14px; padding: 9px 14px; font-size: 0.78rem;">Papan menampilkan <strong>{{ applications|length }} lamaran terbaru</strong> dari {{ total_apps }}. Statistik di atas tetap menghitung semua.</div>
 {% endif %}
 
+<!-- Menu ubah tahap: muncul saat kartu diketuk (fallback layar sentuh) -->
+<div id="stageMenu" class="stage-menu">
+  <div class="stage-menu-title">Ubah tahap</div>
+  {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
+  <button type="button" class="stage-menu-item" onclick="chooseStage('{{ key }}')">
+    <span class="dot" style="background: {{ stage_colors[key] }};"></span>{{ stage_labels[key] }}
+  </button>
+  {% endfor %}
+</div>
+
 <div class="tracker-board" id="trackerBoard">
   {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
   <div class="tcol" data-stage="{{ key }}" ondragover="onDragOver(event)" ondrop="onDrop(event)">
@@ -157,7 +190,6 @@
       <span class="tcol-title">{{ stage_labels[key] }}</span>
       <span class="tcol-count" id="count-{{ key }}">{{ applications | selectattr('stage', 'equalto', key) | list | length }}</span>
     </div>
-    <input type="text" class="tcol-search" placeholder="Cari perusahaan, posisi, email…" oninput="filterColumn(this)">
     <div class="tcol-body" id="col-{{ key }}">
       {% for a in applications if a.stage == key %}
       <div class="tcard" draggable="true" data-id="{{ a.id }}" data-stage="{{ key }}"
@@ -170,8 +202,6 @@
         <div class="tcard-meta">{{ a.to_addr }} · {{ a.created_at_fmt }}</div>
       </div>
       {% endfor %}
-    </div>
-    <div class="tcol-empty" id="empty-{{ key }}">Tidak ada hasil</div>
   </div>
   {% endfor %}
 </div>
@@ -232,14 +262,16 @@
         const card = document.querySelector('.tcard[data-id="' + emailId + '"]');
         if (card) {
           card.dataset.stage = stage;
-          const sel = card.querySelector('.tcard-stage');
-          if (sel) sel.value = stage;
           const dest = document.getElementById('col-' + stage);
           if (dest) dest.appendChild(card);
-          // Kalau kolom tujuan punya filter aktif, terapkan ulang biar kartu
-          // yang baru masuk ikut ter-filter sesuai pencarian kolom itu.
-          const destSearch = dest ? dest.closest('.tcol').querySelector('.tcol-search') : null;
-          if (destSearch && destSearch.value.trim()) filterColumn(destSearch);
+          // Terapkan ulang filter global biar kartu yang baru masuk ikut
+          // ter-filter dengan benar (kalau globalSearch sedang aktif).
+          if (globalQuery) {
+            document.querySelectorAll('.tcard').forEach(function(c) {
+              const s = c.dataset.search || '';
+              c.classList.toggle('filtered-out', s.indexOf(globalQuery) === -1);
+            });
+          }
           refreshCounts();
           if (res.stage_stats) updateFunnel(res.stage_stats);
           card.classList.add('tcard-flash');
@@ -261,19 +293,53 @@
     });
   }
 
-  // ── Filter per kolom (search bar) ──
-  function filterColumn(input) {
-    const col = input.closest('.tcol');
-    const q = input.value.trim().toLowerCase();
-    let visible = 0;
-    col.querySelectorAll('.tcard').forEach(function(card) {
-      const hit = !q || (card.dataset.search || '').indexOf(q) !== -1;
+  // ── Filter global (semua kolom sekaligus) ──
+  let globalQuery = '';
+  function onGlobalSearch(input) {
+    globalQuery = input.value.trim().toLowerCase();
+    let totalVisible = 0;
+    document.querySelectorAll('.tcard').forEach(function(card) {
+      const s = card.dataset.search || '';
+      const hit = !globalQuery || s.indexOf(globalQuery) !== -1;
       card.classList.toggle('filtered-out', !hit);
-      if (hit) visible++;
+      if (hit) totalVisible++;
     });
-    const empty = col.querySelector('.tcol-empty');
-    if (empty) empty.classList.toggle('show', q !== '' && visible === 0);
+    const empty = document.getElementById('globalEmpty');
+    if (empty) {
+      empty.classList.toggle('show', globalQuery !== '' && totalVisible === 0);
+      if (globalQuery !== '' && totalVisible === 0) {
+        empty.textContent = 'Tidak ada lamaran yang cocok dengan \u201C' + input.value.trim() + '\u201D.';
+      }
+    }
   }
+
+  // ── Fallback layar sentuh: ketuk kartu → menu ubah tahap ──
+  const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+  if (isTouch) {
+    document.querySelectorAll('.tcard').forEach(function(card) {
+      card.addEventListener('click', function(e) { openStageMenu(e, card); });
+    });
+  }
+  function openStageMenu(e, card) {
+    e.preventDefault(); e.stopPropagation();
+    const menu = document.getElementById('stageMenu');
+    menu.dataset.emailId = card.dataset.id;
+    menu.style.top = Math.min(e.clientY - 8, window.innerHeight - 210) + 'px';
+    menu.style.left = Math.min(e.clientX - 8, window.innerWidth - 185) + 'px';
+    menu.classList.add('show');
+  }
+  function chooseStage(stage) {
+    const menu = document.getElementById('stageMenu');
+    const id = menu.dataset.emailId;
+    menu.classList.remove('show');
+    if (id) moveCard(parseInt(id, 10), stage);
+  }
+  document.addEventListener('click', function(e) {
+    const menu = document.getElementById('stageMenu');
+    if (menu && menu.classList.contains('show') && !menu.contains(e.target) && !e.target.closest('.tcard')) {
+      menu.classList.remove('show');
+    }
+  });
 
   // Funnel selalu dari server (menghitung SEMUA lamaran, bukan hanya 400 di board)
   function updateFunnel(stageStats) {

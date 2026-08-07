@@ -68,6 +68,7 @@ docker compose up --build -d
 - Setiap lamaran terkirim (`status='sent'`) otomatis masuk sebagai `Applied` (kolom `stage` di tabel `emails`, default `applied`, + `stage_updated_at`)
 - **Drag & drop** antar kolom atau dropdown di tiap kartu (fallback mobile) → `POST /api/tracker/stage` (validasi stage di `VALID_STAGES`, hanya untuk email `sent`)
 - Board menampilkan **400 lamaran terbaru** (biar ringan); funnel statistik di atas menghitung **semua** lamaran (server: `get_stage_stats()`)
+- **Compact**: kolom tinggi terbatas (scroll internal, halaman tidak scroll vertikal — di-scope lewat class `page-tracker` + `body:has()` biar tidak bocor ke halaman lain) + **search bar per kolom** (filter live: perusahaan/posisi/email)
 - Kolom `stage` ikut diekspor di CSV riwayat (`/history/export`)
 
 ### Auth (opsional)

@@ -2,63 +2,50 @@
 {% block title %}Kelola CV — Lamaran Mailer{% endblock %}
 {% block content %}
 
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Kelola CV</h2>
-    <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1">Upload atau hapus file CV (PDF). Maks 10MB.</p>
-  </div>
+<div class="card">
+  <div class="card-title">Kelola CV</div>
+  <p class="muted" style="margin: -8px 0 22px; font-size: 0.88rem;">Upload atau hapus file CV (PDF). Maks 10MB.</p>
 
-  <div class="p-6">
-    <!-- Upload -->
-    <form method="post" action="/cv/upload" enctype="multipart/form-data" data-loading class="mb-6">
-      <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Upload CV Baru</label>
-      <div class="flex gap-3">
-        <input type="file" name="file" accept=".pdf" required
-          class="flex-1 text-sm text-claude-muted-light dark:text-claude-muted-dark file:mr-4 file:py-2 file:px-5 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-claude-accent-light/10 dark:file:bg-claude-accent-dark/10 file:text-claude-accent-light dark:file:text-claude-accent-dark hover:file:bg-claude-accent-light/20 dark:hover:file:bg-claude-accent-dark/20 file:cursor-pointer">
-        <button type="submit"
-          class="bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-2 px-5 rounded-xl transition text-sm">
-          Upload
-        </button>
-      </div>
-    </form>
-
-    <!-- File List -->
-    <div class="space-y-2">
-      {% for f in cv_files %}
-      <div class="flex items-center justify-between py-3 px-4 bg-claude-bg-light dark:bg-claude-bg-dark rounded-xl border border-claude-border-light dark:border-claude-border-dark">
-        <div class="flex items-center gap-3 min-w-0">
-          <svg class="w-5 h-5 text-red-400 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 13h7l-1 5h-5l-1-5z"/></svg>
-          <div class="min-w-0">
-            <span class="text-sm block truncate">{{ f.name }}</span>
-            <span class="text-[11px] text-claude-muted-light dark:text-claude-muted-dark">{{ f.size }}</span>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 shrink-0">
-          <a href="/static/{{ f.name }}" target="_blank" title="Lihat CV"
-            class="text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-accent-light dark:hover:text-claude-accent-dark transition p-1.5 rounded-lg hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-          </a>
-          <a href="/static/{{ f.name }}" download title="Download CV"
-            class="text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-accent-light dark:hover:text-claude-accent-dark transition p-1.5 rounded-lg hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          </a>
-          <form method="post" action="/cv/delete" class="inline" data-confirm="Hapus CV {{ f.name }}?">
-            <input type="hidden" name="filename" value="{{ f.name }}">
-            <button type="submit"
-              class="text-claude-muted-light dark:text-claude-muted-dark hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-            </button>
-          </form>
-        </div>
-      </div>
-      {% endfor %}
-
-      {% if not cv_files %}
-      <div class="text-center py-8 text-claude-muted-light dark:text-claude-muted-dark text-sm">
-        Belum ada file CV. Upload PDF di atas.
-      </div>
-      {% endif %}
+  <!-- Upload -->
+  <form method="post" action="/cv/upload" enctype="multipart/form-data" data-loading style="margin-bottom: 24px;">
+    <label class="field-label">Upload CV Baru</label>
+    <div class="flex" style="gap: 12px; flex-wrap: wrap;">
+      <input type="file" name="file" accept=".pdf" required class="field" style="flex: 1; min-width: 220px; padding-top: 9px; padding-bottom: 9px;">
+      <button type="submit" class="btn">Upload</button>
     </div>
+  </form>
+
+  <!-- File List -->
+  <div>
+    {% for f in cv_files %}
+    <div class="file-row">
+      <div class="flex" style="gap: 12px; min-width: 0;">
+        <svg class="icon-link" style="width: 20px; height: 20px; color: var(--destructive);" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM8.5 13h7l-1 5h-5l-1-5z"/></svg>
+        <div style="min-width: 0;">
+          <div class="name truncate">{{ f.name }}</div>
+          <div class="muted" style="font-size: 0.72rem;">{{ f.size }}</div>
+        </div>
+      </div>
+      <div class="flex" style="gap: 2px; flex-shrink: 0;">
+        <a href="/static/{{ f.name }}" target="_blank" title="Lihat CV" class="icon-link">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        </a>
+        <a href="/static/{{ f.name }}" download title="Download CV" class="icon-link">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        </a>
+        <form method="post" action="/cv/delete" class="inline" data-confirm="Hapus CV {{ f.name }}?">
+          <input type="hidden" name="filename" value="{{ f.name }}">
+          <button type="submit" title="Hapus" class="icon-link danger">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not cv_files %}
+    <div class="empty-state">Belum ada file CV. Upload PDF di atas.</div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

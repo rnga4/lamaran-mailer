@@ -2,34 +2,21 @@
 {% block title %}Batch CSV — Lamaran Mailer{% endblock %}
 {% block content %}
 
-{% if message %}
-<div class="mb-6 px-4 py-3 rounded-xl text-sm
-  {% if msg_type == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800
-  {% else %}bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800{% endif %}">
-  {{ message }}
-</div>
-{% endif %}
-
 {% if active_jobs and active_jobs|length > 1 %}
-<div class="mb-6 px-4 py-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
-  {{ active_jobs|length }} batch aktif (berjalan/menunggu). Menampilkan progress yang terbaru.
-</div>
+<div class="notice warn">{{ active_jobs|length }} batch aktif (berjalan/menunggu). Menampilkan progress yang terbaru.</div>
 {% endif %}
 
 {% if job and job.status == 'queued' %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
-    <h2 class="text-base font-semibold">Batch #{{ job.id }} Menunggu Antrian</h2>
-    <span class="text-xs text-claude-muted-light dark:text-claude-muted-dark">{% if job.filename %}{{ job.filename }}{% endif %}</span>
-  </div>
-  <div class="p-6">
-    <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark mb-4">Batch ini akan mulai otomatis setelah batch sebelumnya selesai. Total <span class="font-medium tabular-nums">{{ job.total }}</span> email.</p>
-    <div class="flex justify-end">
-      <button id="cancelBtn" onclick="cancelBatch({{ job.id }})"
-        class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-medium py-2 px-5 rounded-xl transition text-sm">
-        Batalkan
-      </button>
+<div class="card">
+  <div class="flex between" style="flex-wrap: wrap; gap: 8px;">
+    <div>
+      <div class="card-title" style="margin-bottom: 4px;">Batch #{{ job.id }} Menunggu Antrian</div>
+      <span class="muted" style="font-size: 0.78rem;">{% if job.filename %}{{ job.filename }}{% endif %}</span>
     </div>
+  </div>
+  <p class="muted" style="font-size: 0.88rem; margin: 12px 0 20px;">Batch ini akan mulai otomatis setelah batch sebelumnya selesai. Total <span class="mono" style="font-weight: 600;">{{ job.total }}</span> email.</p>
+  <div class="flex" style="justify-content: flex-end;">
+    <button id="cancelBtn" onclick="cancelBatch({{ job.id }})" class="btn btn-danger">Batalkan</button>
   </div>
 </div>
 <script>
@@ -64,41 +51,36 @@
 {% endif %}
 
 {% if job and job.status == 'running' %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
-    <h2 class="text-base font-semibold">Batch #{{ job.id }} Sedang Berjalan</h2>
-    <span class="text-xs text-claude-muted-light dark:text-claude-muted-dark" id="elapsed">0 detik</span>
+<div class="card">
+  <div class="flex between" style="flex-wrap: wrap; gap: 8px;">
+    <div class="card-title" style="margin-bottom: 0;">Batch #{{ job.id }} Sedang Berjalan</div>
+    <span class="muted mono" id="elapsed" style="font-size: 0.78rem;">0 detik</span>
   </div>
-  <div class="p-6">
-    <div class="mb-4">
-      <div class="flex justify-between text-xs text-claude-muted-light dark:text-claude-muted-dark mb-1.5">
-        <span>Progress</span>
-        <span class="tabular-nums" id="progressText">{{ job.sent + job.failed + job.rate_limited }}/{{ job.total }}</span>
-      </div>
-      <div class="w-full bg-claude-border-light dark:bg-claude-border-dark rounded-full h-2.5">
-        <div id="progressBar" class="bg-claude-accent-light dark:bg-claude-accent-dark h-2.5 rounded-full transition-all" style="width: {{ ((job.sent + job.failed + job.rate_limited) / (job.total or 1) * 100) | int }}%"></div>
-      </div>
+  <div style="margin: 18px 0 22px;">
+    <div class="flex between" style="margin-bottom: 8px;">
+      <span class="muted" style="font-size: 0.82rem;">Progress</span>
+      <span class="mono" style="font-size: 0.82rem; font-weight: 600;" id="progressText">{{ job.sent + job.failed + job.rate_limited }}/{{ job.total }}</span>
     </div>
-    <div class="grid grid-cols-3 gap-4 text-center text-sm">
-      <div>
-        <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums" id="statSent">{{ job.sent }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Berhasil</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold text-red-500 dark:text-red-400 tabular-nums" id="statFailed">{{ job.failed }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Gagal</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold text-amber-500 dark:text-amber-400 tabular-nums" id="statRL">{{ job.rate_limited }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Rate Limit</p>
-      </div>
+    <div class="progress" style="height: 12px;">
+      <div id="progressBar" style="width: {{ ((job.sent + job.failed + job.rate_limited) / (job.total or 1) * 100) | int }}%"></div>
     </div>
-    <div class="mt-5 pt-4 border-t border-claude-border-light dark:border-claude-border-dark flex justify-end">
-      <button id="cancelBtn" onclick="cancelBatch({{ job.id }})"
-        class="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-medium py-2 px-5 rounded-xl transition text-sm">
-        Batalkan
-      </button>
+  </div>
+  <div class="grid3" style="text-align: center; margin-bottom: 8px;">
+    <div>
+      <div class="stat-value ok" style="font-size: 1.5rem;" id="statSent">{{ job.sent }}</div>
+      <div class="card-label" style="margin-top: 6px;">Berhasil</div>
     </div>
+    <div>
+      <div class="stat-value bad" style="font-size: 1.5rem;" id="statFailed">{{ job.failed }}</div>
+      <div class="card-label" style="margin-top: 6px;">Gagal</div>
+    </div>
+    <div>
+      <div class="stat-value warn" style="font-size: 1.5rem;" id="statRL">{{ job.rate_limited }}</div>
+      <div class="card-label" style="margin-top: 6px;">Rate Limit</div>
+    </div>
+  </div>
+  <div class="flex" style="justify-content: flex-end; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);">
+    <button id="cancelBtn" onclick="cancelBatch({{ job.id }})" class="btn btn-danger">Batalkan</button>
   </div>
 </div>
 <script>
@@ -154,36 +136,33 @@
 {% endif %}
 
 {% if queued_jobs %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Antrian Batch ({{ queued_jobs|length }})</h2>
-    <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1">Batch di bawah akan diproses 1-per-1 setelah batch yang berjalan selesai.</p>
+<div class="card" style="padding: 0;">
+  <div style="padding: 22px 24px; border-bottom: 1px solid var(--border);">
+    <div class="card-title" style="margin-bottom: 4px;">Antrian Batch ({{ queued_jobs|length }})</div>
+    <p class="muted" style="font-size: 0.8rem;">Batch di bawah akan diproses 1-per-1 setelah batch yang berjalan selesai.</p>
   </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead><tr class="border-b border-claude-border-light dark:border-claude-border-dark text-left">
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">#</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">File</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Email</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Status</th>
-        <th class="px-6 py-3 text-right"></th>
-      </tr></thead>
+  <div class="scroll-x" style="padding: 6px 24px 14px;">
+    <table class="table" style="min-width: 560px;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>File</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th style="text-align: right;"></th>
+        </tr>
+      </thead>
       <tbody>
         {% for qj in queued_jobs %}
         {% if not job_id or qj.id != job_id %}
-        <tr class="border-b border-claude-border-light/50 dark:border-claude-border-dark/50">
-          <td class="px-6 py-3 text-xs font-mono">#{{ qj.id }}</td>
-          <td class="px-6 py-3 text-xs">{% if qj.filename %}{{ qj.filename }}{% else %}CSV{% endif %}</td>
-          <td class="px-6 py-3 text-xs tabular-nums">{{ qj.total }}</td>
-          <td class="px-6 py-3 text-xs text-amber-600 dark:text-amber-400">
-            <span class="inline-flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Menunggu
-            </span>
-          </td>
-          <td class="px-6 py-3 text-right">
+        <tr>
+          <td class="mono">#{{ qj.id }}</td>
+          <td>{% if qj.filename %}{{ qj.filename }}{% else %}CSV{% endif %}</td>
+          <td class="mono">{{ qj.total }}</td>
+          <td><span class="chip wait"><span class="dot pulse"></span> Menunggu</span></td>
+          <td style="text-align: right;">
             <form method="post" action="/batch/cancel/{{ qj.id }}" style="display:inline">
-              <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ qj.id }}?')"
-                class="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline">Batalkan</button>
+              <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ qj.id }}?')" class="btn btn-sm btn-danger">Batalkan</button>
             </form>
           </td>
         </tr>
@@ -196,84 +175,75 @@
 {% endif %}
 
 {% if job_id and job and job.status == 'done' %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Batch #{{ job.id }} Selesai</h2>
-  </div>
-  <div class="p-6">
-    <div class="grid grid-cols-3 gap-4 text-center text-sm">
-      <div>
-        <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{{ job.sent }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Berhasil</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold text-red-500 dark:text-red-400 tabular-nums">{{ job.failed }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Gagal</p>
-      </div>
-      <div>
-        <p class="text-lg font-bold text-amber-500 dark:text-amber-400 tabular-nums">{{ job.rate_limited }}</p>
-        <p class="text-[10px] text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-widest">Rate Limit</p>
-      </div>
+<div class="card">
+  <div class="card-title" style="margin-bottom: 16px;">Batch #{{ job.id }} Selesai</div>
+  <div class="grid3" style="text-align: center;">
+    <div>
+      <div class="stat-value ok" style="font-size: 1.5rem;">{{ job.sent }}</div>
+      <div class="card-label" style="margin-top: 6px;">Berhasil</div>
     </div>
-    {% if job.last_error %}
-    <div class="mt-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-xs text-red-700 dark:text-red-300">{{ job.last_error }}</div>
-    {% endif %}
+    <div>
+      <div class="stat-value bad" style="font-size: 1.5rem;">{{ job.failed }}</div>
+      <div class="card-label" style="margin-top: 6px;">Gagal</div>
+    </div>
+    <div>
+      <div class="stat-value warn" style="font-size: 1.5rem;">{{ job.rate_limited }}</div>
+      <div class="card-label" style="margin-top: 6px;">Rate Limit</div>
+    </div>
   </div>
+  {% if job.last_error %}
+  <div class="notice danger" style="margin-top: 18px;">{{ job.last_error }}</div>
+  {% endif %}
 </div>
 {% endif %}
 
 {% if batch_history %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Riwayat Batch</h2>
+<div class="card" style="padding: 0;">
+  <div style="padding: 22px 24px; border-bottom: 1px solid var(--border);">
+    <div class="card-title" style="margin-bottom: 0;">Riwayat Batch</div>
   </div>
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead><tr class="border-b border-claude-border-light dark:border-claude-border-dark text-left">
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">#</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Status</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Progress</th>
-        <th class="px-6 py-3 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Waktu</th>
-        <th class="px-6 py-3"></th>
-      </tr></thead>
+  <div class="scroll-x" style="padding: 6px 24px 14px;">
+    <table class="table" style="min-width: 640px;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Status</th>
+          <th>Progress</th>
+          <th>Waktu</th>
+          <th style="text-align: right;"></th>
+        </tr>
+      </thead>
       <tbody>
         {% for bj in batch_history %}
-        <tr class="border-b border-claude-border-light/50 dark:border-claude-border-dark/50">
-          <td class="px-6 py-3 text-xs">
-            <a href="/batch?job_id={{ bj.id }}" class="text-claude-accent-light dark:text-claude-accent-dark hover:underline font-mono">#{{ bj.id }}</a>
-          </td>
-          <td class="px-6 py-3">
+        <tr>
+          <td><a href="/batch?job_id={{ bj.id }}" class="mono">#{{ bj.id }}</a></td>
+          <td>
             {% if bj.status == 'running' %}
-            <span class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Berjalan
-            </span>
+            <span class="chip run"><span class="dot pulse"></span> Berjalan</span>
             {% elif bj.status == 'done' %}
-            <span class="text-xs text-emerald-600 dark:text-emerald-400">
-              {% if bj.failed == 0 and bj.rate_limited == 0 %}Selesai{% else %}Selesai (dengan error){% endif %}
-            </span>
+            <span class="chip {% if bj.failed == 0 and bj.rate_limited == 0 %}done{% else %}wait{% endif %}">{% if bj.failed == 0 and bj.rate_limited == 0 %}Selesai{% else %}Selesai (error){% endif %}</span>
             {% elif bj.status == 'queued' %}
-            <span class="inline-flex items-center gap-1 text-xs text-sky-600 dark:text-sky-400">
-              <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> Menunggu
-            </span>
+            <span class="chip wait"><span class="dot pulse"></span> Menunggu</span>
             {% elif bj.status == 'cancelled' %}
-            <span class="text-xs text-red-500 dark:text-red-400">Dibatalkan</span>
+            <span class="chip failed">Dibatalkan</span>
             {% endif %}
           </td>
-          <td class="px-6 py-3 text-xs tabular-nums">
-            {{ bj.sent }} berhasil / {{ bj.failed }} gagal / {{ bj.rate_limited }} rate limit dari {{ bj.total }}
+          <td class="mono muted" style="font-size: 0.8rem;">
+            {{ bj.sent }} ok / {{ bj.failed }} gagal / {{ bj.rate_limited }} limit dari {{ bj.total }}
           </td>
-          <td class="px-6 py-3 text-xs text-claude-muted-light dark:text-claude-muted-dark tabular-nums">
+          <td class="muted" style="font-size: 0.8rem;">
             {% set ago = (now - bj.created_at) // 60 %}
             {% if ago < 1 %}baru saja{% elif ago < 60 %}{{ ago }}m{% else %}{{ ago // 60 }}j{% endif %}
           </td>
-          <td class="px-6 py-3 text-right">
-            {% if bj.status in ('running', 'queued') %}
-            <form method="post" action="/batch/cancel/{{ bj.id }}" style="display:inline">
-              <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ bj.id }}?')"
-                class="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline">Batalkan</button>
-            </form>
-            {% endif %}
-            <a href="/batch?job_id={{ bj.id }}" class="text-xs text-claude-muted-light dark:text-claude-muted-dark hover:underline ml-2">Detail</a>
+          <td style="text-align: right;">
+            <div class="flex" style="justify-content: flex-end; gap: 10px;">
+              {% if bj.status in ('running', 'queued') %}
+              <form method="post" action="/batch/cancel/{{ bj.id }}" style="display:inline">
+                <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ bj.id }}?')" class="btn btn-sm btn-danger">Batalkan</button>
+              </form>
+              {% endif %}
+              <a href="/batch?job_id={{ bj.id }}" class="btn btn-sm btn-ghost">Detail</a>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -283,170 +253,143 @@
 </div>
 {% endif %}
 
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
-    <h2 class="text-base font-semibold">Format CSV</h2>
-    <a href="/static/template_lamaran.csv" download
-      class="inline-flex items-center gap-1.5 text-xs text-claude-muted-light dark:text-claude-muted-dark hover:text-claude-accent-light dark:hover:text-claude-accent-dark border border-claude-border-light dark:border-claude-border-dark px-3 py-1.5 rounded-lg transition">
-      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-      Download Template
-    </a>
+<div class="card">
+  <div class="flex between" style="flex-wrap: wrap; gap: 10px;">
+    <div class="card-title" style="margin-bottom: 0;">Format CSV</div>
+    <a href="/static/template_lamaran.csv" download class="btn btn-sm btn-ghost">Download Template</a>
   </div>
-  <div class="p-6">
-    <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark mb-3">Kolom: <code class="bg-claude-bg-light dark:bg-claude-bg-dark px-1.5 py-0.5 rounded-md text-xs">email</code> dan <code class="bg-claude-bg-light dark:bg-claude-bg-dark px-1.5 py-0.5 rounded-md text-xs">company</code> (atau <code class="bg-claude-bg-light dark:bg-claude-bg-dark px-1.5 py-0.5 rounded-md text-xs">nama_pt</code>).</p>
-  </div>
+  <p class="muted" style="font-size: 0.88rem; margin-top: 14px;">Kolom: <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">email</code> dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">company</code> (atau <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">nama_pt</code>).</p>
 </div>
 
 {% if preview_mode %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden mb-6">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Preview ({{ rows|length }} email valid{% if invalid_rows %}, {{ invalid_rows|length }} invalid{% endif %}{% if duplicate_rows %}, {{ duplicate_rows|length }} duplikat{% endif %}{% if prev_sent_rows %}, {{ prev_sent_rows|length }} sudah dikirim{% endif %})</h2>
-  </div>
-  <div class="p-6">
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs">
-      <div class="bg-claude-bg-light dark:bg-claude-bg-dark px-3 py-2 rounded-lg border border-claude-border-light dark:border-claude-border-dark">
-        <span class="text-claude-muted-light dark:text-claude-muted-dark">Posisi:</span>
-        <span class="font-medium ml-1">{{ position }}</span>
-      </div>
-      <div class="bg-claude-bg-light dark:bg-claude-bg-dark px-3 py-2 rounded-lg border border-claude-border-light dark:border-claude-border-dark">
-        <span class="text-claude-muted-light dark:text-claude-muted-dark">CV:</span>
-        <span class="font-medium ml-1">{{ cv_file }}</span>
-      </div>
-      <div class="bg-claude-bg-light dark:bg-claude-bg-dark px-3 py-2 rounded-lg border border-claude-border-light dark:border-claude-border-dark">
-        <span class="text-claude-muted-light dark:text-claude-muted-dark">Sisa Kuota:</span>
-        <div class="mt-1 space-y-1">
-          {% for acct in smtp_accounts %}
-          {% set rl = rate_limit.get(acct.key, {'used': 0, 'remaining': 30, 'max': 30, 'resets_in': 3600}) %}
-          <div class="flex justify-between text-[11px]">
-            <span class="truncate mr-2">{{ acct.name }}</span>
-            <span class="tabular-nums shrink-0">{{ rl.remaining }}/{{ rl.max }} {% if rl.remaining < rl.max %}(reset {{ rl.resets_in // 60 }}m){% else %}tersedia{% endif %}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-    {% if extra %}
-    <div class="mb-4 px-3 py-2 rounded-lg bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark text-xs">
-      <span class="text-claude-muted-light dark:text-claude-muted-dark">Kalimat Tambahan:</span>
-      <span class="ml-1">{{ extra }}</span>
-    </div>
-    {% endif %}
-    {% if duplicate_rows %}
-    <div class="mb-4 px-4 py-3 rounded-xl text-sm bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-800">
-      {{ duplicate_rows|length }} perusahaan duplikat (hanya yang pertama dikirim):
-      <div class="mt-2 max-h-24 overflow-y-auto text-xs space-y-0.5">
-        {% for r in duplicate_rows %}
-        <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-    {% if prev_sent_rows %}
-    <div class="mb-4 px-4 py-3 rounded-xl text-sm bg-orange-50 text-orange-800 border border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800">
-      {{ prev_sent_rows|length }} email sudah pernah dikirim sebelumnya dan akan dilewati:
-      <div class="mt-2 max-h-24 overflow-y-auto text-xs space-y-0.5">
-        {% for r in prev_sent_rows %}
-        <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-    {% if invalid_rows %}
-    <div class="mb-4 px-4 py-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800">
-      {{ invalid_rows|length }} email invalid (format tidak sesuai) dan akan dilewati:
-      <div class="mt-2 max-h-24 overflow-y-auto text-xs space-y-0.5">
-        {% for r in invalid_rows %}
-        <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
+<div class="card">
+  <div class="card-title">Preview ({{ rows|length }} email valid{% if invalid_rows %}, {{ invalid_rows|length }} invalid{% endif %}{% if duplicate_rows %}, {{ duplicate_rows|length }} duplikat{% endif %}{% if prev_sent_rows %}, {{ prev_sent_rows|length }} sudah dikirim{% endif %})</div>
 
-    <div class="overflow-x-auto mb-5">
-      <table class="w-full text-sm">
-        <thead><tr class="border-b border-claude-border-light dark:border-claude-border-dark text-left">
-          <th class="pb-2.5 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">#</th>
-          <th class="pb-2.5 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Email</th>
-          <th class="pb-2.5 text-claude-muted-light dark:text-claude-muted-dark text-xs font-medium uppercase tracking-wide">Perusahaan</th>
-        </tr></thead>
-        <tbody>
-          {% for r in rows %}
-          <tr class="border-b border-claude-border-light/50 dark:border-claude-border-dark/50">
-            <td class="py-2.5 text-claude-muted-light dark:text-claude-muted-dark">{{ r.row }}</td>
-            <td class="py-2.5">{{ r.email }}</td>
-            <td class="py-2.5">{{ r.company }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="grid3" style="font-size: 0.85rem; margin-bottom: 16px;">
+    <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
+      <span class="muted">Posisi:</span> <span style="font-weight: 600;">{{ position }}</span>
     </div>
-    <form method="post" action="/batch/send" data-loading data-confirm="Kirim {{ rows|length }} email lamaran sekarang?">
-      <input type="hidden" name="cache_key" value="{{ cache_key }}">
-      <div class="flex flex-col sm:flex-row gap-3">
-        <button type="submit"
-          class="flex-1 bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-2.5 px-6 rounded-xl transition text-sm">
-          Kirim Semua ({{ rows|length }})
-        </button>
-        <a href="/batch?position={{ position|urlencode }}&extra={{ extra|urlencode }}"
-          class="flex-1 text-center border border-claude-border-light dark:border-claude-border-dark hover:border-claude-text-light/30 dark:hover:border-claude-text-dark/30 font-medium py-2.5 px-6 rounded-xl transition text-sm">
-          Kembali
-        </a>
+    <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
+      <span class="muted">CV:</span> <span style="font-weight: 600;">{{ cv_file }}</span>
+    </div>
+    <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
+      <span class="muted">Sisa Kuota:</span>
+      <div style="margin-top: 6px;">
+        {% for acct in smtp_accounts %}
+        {% set rl = rate_limit.get(acct.key, {'used': 0, 'remaining': 30, 'max': 30, 'resets_in': 3600}) %}
+        <div class="flex between" style="gap: 8px; font-size: 0.78rem;">
+          <span class="truncate">{{ acct.name }}</span>
+          <span class="mono muted">{{ rl.remaining }}/{{ rl.max }} {% if rl.remaining < rl.max %}(reset {{ rl.resets_in // 60 }}m){% else %}tersedia{% endif %}</span>
+        </div>
+        {% endfor %}
       </div>
-    </form>
+    </div>
   </div>
+
+  {% if extra %}
+  <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px; font-size: 0.85rem;">
+    <span class="muted">Kalimat Tambahan:</span> <span style="margin-left: 6px;">{{ extra }}</span>
+  </div>
+  {% endif %}
+
+  {% if duplicate_rows %}
+  <div class="notice info" style="margin-bottom: 14px;">
+    {{ duplicate_rows|length }} perusahaan duplikat (hanya yang pertama dikirim):
+    <div style="margin-top: 8px; max-height: 120px; overflow-y: auto; font-size: 0.78rem; line-height: 1.8;">
+      {% for r in duplicate_rows %}
+      <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if prev_sent_rows %}
+  <div class="notice warn" style="margin-bottom: 14px;">
+    {{ prev_sent_rows|length }} email sudah pernah dikirim sebelumnya dan akan dilewati:
+    <div style="margin-top: 8px; max-height: 120px; overflow-y: auto; font-size: 0.78rem; line-height: 1.8;">
+      {% for r in prev_sent_rows %}
+      <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if invalid_rows %}
+  <div class="notice warn" style="margin-bottom: 14px;">
+    {{ invalid_rows|length }} email invalid (format tidak sesuai) dan akan dilewati:
+    <div style="margin-top: 8px; max-height: 120px; overflow-y: auto; font-size: 0.78rem; line-height: 1.8;">
+      {% for r in invalid_rows %}
+      <div>{{ r.row }}. {{ r.email }} — {{ r.company }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="scroll-x" style="margin-bottom: 20px;">
+    <table class="table" style="min-width: 480px;">
+      <thead>
+        <tr>
+          <th style="width: 60px;">#</th>
+          <th>Email</th>
+          <th>Perusahaan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="muted">{{ r.row }}</td>
+          <td>{{ r.email }}</td>
+          <td>{{ r.company }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="/batch/send" data-loading data-confirm="Kirim {{ rows|length }} email lamaran sekarang?">
+    <input type="hidden" name="cache_key" value="{{ cache_key }}">
+    <div class="flex" style="gap: 12px; flex-wrap: wrap;">
+      <button type="submit" class="btn" style="flex: 1; min-width: 220px;">Kirim Semua ({{ rows|length }})</button>
+      <a href="/batch?position={{ position|urlencode }}&extra={{ extra|urlencode }}" class="btn btn-ghost" style="flex: 1; min-width: 220px;">Kembali</a>
+    </div>
+  </form>
 </div>
 
 {% elif not preview_mode and not (job_id and job and job.status == 'done') %}
-<div class="bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-sm overflow-hidden">
-  <div class="px-6 py-4 border-b border-claude-border-light dark:border-claude-border-dark">
-    <h2 class="text-base font-semibold">Batch Kirim via CSV</h2>
-    <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1">Upload atau drag & drop file CSV.</p>
-  </div>
-  <form method="post" action="/batch/preview" enctype="multipart/form-data" class="p-6 space-y-5" id="batchForm">
-    <div id="dropZone"
-      class="border-2 border-dashed border-claude-border-light dark:border-claude-border-dark rounded-xl p-8 text-center cursor-pointer transition-all hover:border-claude-accent-light dark:hover:border-claude-accent-dark hover:bg-claude-accent-light/5 dark:hover:bg-claude-accent-dark/5"
-      onclick="document.getElementById('batchFile').click()">
-      <svg class="w-10 h-10 mx-auto mb-3 text-claude-muted-light dark:text-claude-muted-dark opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-      <p class="text-sm text-claude-muted-light dark:text-claude-muted-dark" id="dropText">Drop CSV file di sini atau <span class="text-claude-accent-light dark:text-claude-accent-dark font-medium">klik untuk browse</span></p>
-      <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-1 opacity-60" id="dropFileName"></p>
-      <div id="csvInfo" class="mt-3 hidden">
-        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark text-xs text-claude-muted-light dark:text-claude-muted-dark">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          <span id="csvRowCount"></span>
-        </div>
+<div class="card">
+  <div class="card-title">Batch Kirim via CSV</div>
+  <p class="muted" style="margin: -8px 0 20px; font-size: 0.88rem;">Upload atau drag & drop file CSV.</p>
+  <form method="post" action="/batch/preview" enctype="multipart/form-data" id="batchForm" style="display: flex; flex-direction: column; gap: 18px;">
+    <div id="dropZone" class="dropzone" onclick="document.getElementById('batchFile').click()">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p id="dropText">Drop CSV file di sini atau <strong style="color: var(--primary);">klik untuk browse</strong></p>
+      <p id="dropFileName" class="muted" style="font-size: 0.8rem; margin-top: 6px;"></p>
+      <div id="csvInfo" class="hidden" style="margin-top: 12px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; background: var(--muted); border: 1px solid var(--border); font-size: 0.78rem;" id="csvRowCount"></span>
       </div>
-      <input type="file" name="file" id="batchFile" accept=".csv" required class="hidden"
-        onchange="onFileSelect(this.files[0])">
+      <input type="file" name="file" id="batchFile" accept=".csv" required class="hidden" onchange="onFileSelect(this.files[0])">
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid2">
       <div>
-        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Posisi</label>
-        <input type="text" name="position" value="{{ request.query_params.get('position', 'IT Support / DevOps') }}"
-          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition">
+        <label class="field-label">Posisi</label>
+        <input type="text" name="position" value="{{ request.query_params.get('position', 'IT Support / DevOps') }}" class="field">
       </div>
       <div>
-        <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">CV (PDF)</label>
+        <label class="field-label">CV (PDF)</label>
         {% if cv_files %}
-        <select name="cv_file"
-          class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition appearance-none">
+        <select name="cv_file" class="field">
           {% for f in cv_files %}
           <option value="{{ f }}" {% if 'ID' in f %}selected{% endif %}>{{ f }}</option>
           {% endfor %}
         </select>
         {% else %}
-        <p class="text-sm text-red-500 py-2.5">Tidak ada PDF. <a href="/cv" class="underline">Upload CV</a></p>
+        <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
         {% endif %}
       </div>
     </div>
     <div>
-      <label class="block text-xs font-medium text-claude-muted-light dark:text-claude-muted-dark uppercase tracking-wide mb-1.5">Kalimat Tambahan <span class="normal-case tracking-normal opacity-60">(opsional)</span></label>
-      <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..."
-        class="w-full bg-claude-bg-light dark:bg-claude-bg-dark border border-claude-border-light dark:border-claude-border-dark rounded-xl px-4 py-2.5 text-sm placeholder-claude-muted-light/50 dark:placeholder-claude-muted-dark/50 focus:outline-none focus:ring-2 focus:ring-claude-accent-light/30 dark:focus:ring-claude-accent-dark/30 focus:border-claude-accent-light dark:focus:border-claude-accent-dark transition resize-none"></textarea>
+      <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
+      <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..." class="field"></textarea>
     </div>
-    <button type="submit"
-      class="w-full bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-3 rounded-xl transition text-sm">
-      Preview CSV
-    </button>
+    <button type="submit" class="btn btn-block">Preview CSV</button>
   </form>
 </div>
 {% endif %}
@@ -473,11 +416,11 @@
 
   const dz = document.getElementById('dropZone');
   if (dz) {
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-claude-accent-light', 'dark:border-claude-accent-dark', 'bg-claude-accent-light/10', 'dark:bg-claude-accent-dark/10'); });
-    dz.addEventListener('dragleave', () => { dz.classList.remove('border-claude-accent-light', 'dark:border-claude-accent-dark', 'bg-claude-accent-light/10', 'dark:bg-claude-accent-dark/10'); });
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+    dz.addEventListener('dragleave', () => { dz.classList.remove('drag'); });
     dz.addEventListener('drop', e => {
       e.preventDefault();
-      dz.classList.remove('border-claude-accent-light', 'dark:border-claude-accent-dark', 'bg-claude-accent-light/10', 'dark:bg-claude-accent-dark/10');
+      dz.classList.remove('drag');
       const file = e.dataTransfer.files[0];
       if (file && file.name.endsWith('.csv')) {
         const dt = new DataTransfer();

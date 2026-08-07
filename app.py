@@ -169,6 +169,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lamaran Mailer", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(CV_DIR)), name="static")
+app.mount("/assets", StaticFiles(directory="static"), name="assets")
 templates = Jinja2Templates(directory="templates")
 
 

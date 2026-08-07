@@ -1,226 +1,409 @@
 <!DOCTYPE html>
-<html lang="id" class="dark">
+<html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>@</text></svg>">
   <title>{% block title %}Lamaran Mailer{% endblock %}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            claude: {
-              bg: { light: '#FAF7F2', dark: '#1A1A1A' },
-              sidebar: { light: '#F0EDE6', dark: '#141414' },
-              border: { light: '#E5E0D5', dark: '#2A2A2A' },
-              text: { light: '#1A1A1A', dark: '#E8E4DE' },
-              muted: { light: '#6B6560', dark: '#8A8580' },
-              accent: { light: '#D97757', dark: '#E8865E' },
-              accentHover: { light: '#C4664A', dark: '#D4764E' },
-              input: { light: '#FFFFFF', dark: '#222222' },
-              card: { light: '#FFFFFF', dark: '#1E1E1E' },
-            }
-          },
-          fontFamily: {
-            sans: ['"Segoe UI"', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-          }
-        }
-      }
-    }
-
-    function toggleDark() {
-      const html = document.documentElement;
-      html.classList.toggle('dark');
-      localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
-    }
-
-    function toggleSidebar() {
-      const sidebar = document.getElementById('sidebar');
-      const overlay = document.getElementById('sidebarOverlay');
-      sidebar.classList.toggle('-translate-x-full');
-      overlay.classList.toggle('hidden');
-    }
-
-    (function() {
-      const saved = localStorage.getItem('theme');
-      if (saved === 'light') document.documentElement.classList.remove('dark');
-    })();
-  </script>
+  <link rel="stylesheet" href="/assets/pl-komatsu-ui-template.css">
   <style>
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
-    .dark ::-webkit-scrollbar-thumb { background: #444; }
+    /* ── Lamaran Mailer app shell & custom components ── */
 
-    .toast { animation: slideIn 0.3s ease, fadeOut 0.3s ease 3.7s forwards; }
-    @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+    body {
+      display: block;
+      padding: 0;
+      user-select: auto;
+      -webkit-user-select: auto;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    .hidden { display: none !important; }
+    .muted { color: var(--muted-foreground); }
+    .mono { font-family: var(--font-mono); }
+    .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .flex { display: flex; align-items: center; gap: 10px; }
+    .between { justify-content: space-between; }
+    .btn-block { width: 100%; }
+    .page { display: flex; flex-direction: column; gap: 16px; }
+    .section-title { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; }
 
-    .spinner { border: 3px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.6s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ---------- Layout ---------- */
+    .app { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 268px; min-width: 268px; height: 100vh;
+      position: sticky; top: 0;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 50;
+    }
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .content { width: 100%; max-width: 920px; margin: 0 auto; padding: 34px 28px 8vh; }
 
-    .modal-overlay { animation: fadeIn 0.15s ease; }
-    .modal-box { animation: scaleIn 0.15s ease; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .brand { padding: 22px 20px; border-bottom: 1px solid var(--border); }
+    .brand h1 { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+    .brand p { font-size: 0.7rem; color: var(--muted-foreground); letter-spacing: 0.05em; margin-top: 2px; }
+
+    .nav { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px;
+      font-size: 0.88rem; font-weight: 600;
+      color: var(--muted-foreground);
+      transition: all 0.15s;
+    }
+    .nav a:hover { background: color-mix(in oklch, var(--primary) 8%, transparent); color: var(--foreground); }
+    .nav a.active { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); }
+    .nav a svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+    .sidebar-foot { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--muted-foreground); }
+    .sf-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+    .sf-label { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted-foreground); }
+    .sf-value { font-size: 0.72rem; }
+    .sf-name { font-size: 0.72rem; font-weight: 600; color: var(--foreground); }
+    .sf-account { margin-bottom: 12px; }
+    .rate-bar { background: var(--muted); border-radius: 99px; height: 5px; overflow: hidden; margin: 4px 0; }
+    .rate-bar > div { height: 100%; border-radius: 99px; background: var(--primary); transition: width 0.3s; }
+
+    .topbar {
+      display: none; position: sticky; top: 0; z-index: 40;
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 12px 16px; align-items: center; justify-content: space-between;
+    }
+    .topbar-title { font-size: 0.95rem; font-weight: 700; font-family: var(--font-display); }
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+      background: transparent; color: var(--foreground); cursor: pointer;
+    }
+    .icon-btn:hover { background: var(--muted); }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; display: none; }
+    .sidebar-overlay.show { display: block; }
+
+    /* ---------- Forms ---------- */
+    .field-label {
+      display: block; font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted-foreground); margin-bottom: 8px;
+    }
+    .field-label .opt { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.65; }
+    .field {
+      width: 100%; padding: 11px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--card); color: var(--foreground);
+      font-family: var(--font-sans); font-size: 0.92rem;
+      outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 18%, transparent); }
+    textarea.field { resize: vertical; line-height: 1.55; }
+    select.field {
+      appearance: none; -webkit-appearance: none; padding-right: 34px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23999' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 768px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 22px; border-radius: 99px; border: 1px solid transparent;
+      background: var(--primary); color: var(--primary-foreground);
+      font-family: var(--font-sans); font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; text-decoration: none; white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(1.07); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0) scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .btn-ghost { background: transparent; color: var(--foreground); border-color: var(--border); }
+    .btn-ghost:hover { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 8%, transparent); filter: none; }
+    .btn-danger { background: transparent; color: var(--destructive); border-color: color-mix(in oklch, var(--destructive) 40%, transparent); }
+    .btn-danger:hover { background: var(--destructive); color: var(--primary-foreground); filter: none; }
+
+    /* ---------- Tables ---------- */
+    .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .table th {
+      text-align: left; font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--muted-foreground);
+      padding: 0 10px 10px 0; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .table td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .table tbody tr:last-child td { border-bottom: none; }
+    .table tbody tr:hover td { background: color-mix(in oklch, var(--primary) 4%, transparent); }
+    .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px 24px; }
+
+    /* ---------- Chips / status ---------- */
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+    .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .chip.sent, .chip.done { background: color-mix(in oklch, var(--success) 14%, transparent); color: var(--success); }
+    .chip.failed, .chip.cancelled { background: color-mix(in oklch, var(--destructive) 13%, transparent); color: var(--destructive); }
+    .chip.run, .chip.wait { background: color-mix(in oklch, oklch(0.72 0.15 80) 16%, transparent); color: oklch(0.52 0.13 75); }
+    .chip.wait { color: oklch(0.45 0.1 250); background: color-mix(in oklch, oklch(0.6 0.13 250) 14%, transparent); }
+    .chip .pulse { animation: pulseDot 1.4s infinite; }
+    @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ---------- Notices ---------- */
+    .notice { padding: 13px 16px; border-radius: var(--radius-md); font-size: 0.85rem; border: 1px solid; line-height: 1.5; }
+    .notice.info { background: color-mix(in oklch, var(--primary) 8%, transparent); border-color: color-mix(in oklch, var(--primary) 28%, transparent); color: var(--foreground); }
+    .notice.warn { background: color-mix(in oklch, oklch(0.75 0.15 75) 15%, transparent); border-color: color-mix(in oklch, oklch(0.7 0.15 75) 38%, transparent); color: oklch(0.45 0.11 70); }
+    .notice.danger { background: color-mix(in oklch, var(--destructive) 8%, transparent); border-color: color-mix(in oklch, var(--destructive) 30%, transparent); color: var(--destructive); }
+    .notice.success { background: color-mix(in oklch, var(--success) 10%, transparent); border-color: color-mix(in oklch, var(--success) 30%, transparent); color: var(--success); }
+
+    /* ---------- Progress ---------- */
+    .progress { background: var(--muted); border-radius: 99px; height: 10px; overflow: hidden; }
+    .progress > div { height: 100%; background: linear-gradient(90deg, var(--primary), color-mix(in oklch, var(--primary) 65%, oklch(0.6 0.15 300))); border-radius: 99px; transition: width 0.4s ease; }
+
+    /* ---------- Stats ---------- */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+    .stat-value { font-family: var(--font-mono); font-size: 2rem; font-weight: 700; line-height: 1.1; }
+    .stat-value.ok { color: var(--success); }
+    .stat-value.bad { color: var(--destructive); }
+    .stat-value.accent { color: var(--primary); }
+    .stat-value.warn { color: oklch(0.55 0.13 75); }
+    .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: 0.9rem; }
+    .list-row + .list-row { border-top: 1px solid var(--border); }
+    .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 160px; }
+    .bar-chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+    .bar-chart .val { font-size: 0.62rem; color: var(--muted-foreground); font-family: var(--font-mono); }
+    .bar-chart .bar { width: 100%; min-height: 3px; border-radius: 5px 5px 0 0; background: linear-gradient(180deg, var(--primary), color-mix(in oklch, var(--primary) 40%, transparent)); transition: height 0.4s; }
+    .bar-chart .day { font-size: 0.6rem; color: var(--muted-foreground); }
+
+    /* ---------- Preview ---------- */
+    .preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 4px 0 20px; font-size: 0.9rem; }
+    .preview-block { background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px; }
+    .preview-block pre { white-space: pre-wrap; font-family: var(--font-sans); font-size: 0.88rem; line-height: 1.6; margin-top: 10px; color: var(--foreground); }
+    .frame { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; margin-top: 10px; }
+    .acct-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; padding: 2px 0; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot.ok { background: var(--success); }
+    .dot.bad { background: var(--destructive); }
+
+    /* ---------- Dropzone ---------- */
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: var(--radius-lg);
+      padding: 40px 20px; text-align: center; cursor: pointer;
+      color: var(--muted-foreground); transition: all 0.2s;
+    }
+    .dropzone:hover, .dropzone.drag { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 6%, transparent); color: var(--foreground); }
+    .dropzone svg { width: 44px; height: 44px; margin: 0 auto 12px; opacity: 0.4; }
+    .dropzone p { font-size: 0.9rem; }
+
+    /* ---------- Misc ---------- */
+    .file-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; background: var(--muted);
+      border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 8px;
+    }
+    .file-row .name { font-size: 0.9rem; font-weight: 600; }
+    .icon-link { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--muted-foreground); transition: all 0.15s; }
+    .icon-link:hover { background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--primary); }
+    .icon-link.danger:hover { background: color-mix(in oklch, var(--destructive) 12%, transparent); color: var(--destructive); }
+    .icon-link svg { width: 16px; height: 16px; }
+
+    .pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+    @media (max-width: 860px) {
+      .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.25s ease; }
+      .sidebar.open { transform: translateX(0); }
+      .topbar { display: flex; }
+      .content { padding: 22px 16px 8vh; }
+    }
   </style>
 </head>
-<body class="min-h-screen bg-claude-bg-light dark:bg-claude-bg-dark text-claude-text-light dark:text-claude-text-dark transition-colors">
+<body class="dark">
 
   <!-- Toast -->
   {% if message %}
-  <div class="toast fixed top-3 left-3 right-3 md:left-auto md:right-4 md:max-w-md z-[60] px-4 py-3 rounded-xl text-sm shadow-lg border
-    {% if msg_type == 'success' %}bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800
-    {% else %}bg-red-50 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800{% endif %}">
-    {{ message }}
+  <div class="toast-msg toast-{% if msg_type == 'success' %}success{% elif msg_type == 'warning' %}warning{% elif msg_type == 'error' %}error{% else %}info{% endif %}">
+    <span class="toast-icon-container">
+      <svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {% if msg_type == 'success' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        {% elif msg_type == 'warning' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        {% else %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>{% endif %}
+      </svg>
+    </span>
+    <div class="toast-message-text-container">
+      <p class="toast-message-text">{{ message }}</p>
+    </div>
+    <svg class="toast-cross-icon" onclick="this.closest('.toast-msg').remove()" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    <span class="toast-progress" style="animation-duration:4s"></span>
   </div>
   {% endif %}
 
   <!-- Modal -->
-  <div id="modalOverlay" class="modal-overlay hidden fixed inset-0 bg-black/50 z-[70 flex items-center justify-center p-4" onclick="closeModal()">
-    <div id="modalBox" class="modal-box bg-claude-card-light dark:bg-claude-card-dark rounded-2xl border border-claude-border-light dark:border-claude-border-dark shadow-xl max-w-md w-full p-6" onclick="event.stopPropagation()">
-      <p id="modalMessage" class="text-sm"></p>
-      <div class="flex justify-end gap-3 mt-5">
-        <button onclick="closeModal()"
-          class="border border-claude-border-light dark:border-claude-border-dark hover:border-claude-text-light/30 dark:hover:border-claude-text-dark/30 font-medium py-2 px-5 rounded-xl transition text-sm">
-          Batal
-        </button>
-        <button id="modalConfirmBtn"
-          class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-5 rounded-xl transition text-sm">
-          Hapus
-        </button>
+  <div id="modalOverlay" class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <h2 id="modalTitle">Konfirmasi</h2>
+      <p id="modalMessage" class="muted" style="font-size:0.9rem; line-height:1.5;"></p>
+      <div class="flex" style="justify-content:flex-end; margin-top:22px;">
+        <button class="btn btn-ghost" onclick="closeModal()">Batal</button>
+        <button id="modalConfirmBtn" class="btn btn-danger">Hapus</button>
       </div>
     </div>
   </div>
 
   <!-- Mobile Overlay -->
-  <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-40 md:hidden" onclick="toggleSidebar()"></div>
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
 
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-claude-sidebar-light dark:bg-claude-sidebar-dark border-r border-claude-border-light dark:border-claude-border-dark flex flex-col shrink-0 z-50 transition-transform duration-200 -translate-x-full md:translate-x-0">
-    <div class="p-5 border-b border-claude-border-light dark:border-claude-border-dark flex items-center justify-between">
-      <div>
-        <h1 class="text-lg font-semibold tracking-tight">Lamaran Mailer</h1>
-        <p class="text-xs text-claude-muted-light dark:text-claude-muted-dark mt-0.5">Automated job application mailer</p>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <h1>Lamaran Mailer</h1>
+        <p>Automated job application mailer</p>
       </div>
-      <button onclick="toggleSidebar()" class="md:hidden p-1.5 rounded-lg hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-    </div>
 
-    <nav class="flex-1 p-3 space-y-0.5 overflow-y-auto">
-      {% set nav_items = [
-        ('/', 'Kirim Email', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>'),
-        ('/batch', 'Batch CSV', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>'),
-        ('/history', 'History', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>'),
-        ('/dashboard', 'Dashboard', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'),
-        ('/cv', 'Kelola CV', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>'),
-        ('/templates-editor', 'Template', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'),
-      ] %}
-      {% for path, label, icon in nav_items %}
-      <a href="{{ path }}" onclick="if(window.innerWidth<768)toggleSidebar()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors
-        {% if request.url.path == path %}bg-claude-border-light/60 dark:bg-claude-border-dark/60 font-medium{% else %}text-claude-muted-light dark:text-claude-muted-dark hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40{% endif %}">
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ icon }}</svg>
-        {{ label }}
-      </a>
-      {% endfor %}
-    </nav>
+      <nav class="nav">
+        {% set nav_items = [
+          ('/', 'Kirim Email', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>'),
+          ('/batch', 'Batch CSV', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>'),
+          ('/history', 'History', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>'),
+          ('/dashboard', 'Dashboard', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>'),
+          ('/cv', 'Kelola CV', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>'),
+          ('/templates-editor', 'Template', '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>'),
+        ] %}
+        {% for path, label, icon in nav_items %}
+        <a href="{{ path }}" onclick="if(window.innerWidth<860)toggleSidebar(false)" class="{% if request.url.path == path %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ icon }}</svg>
+          {{ label }}
+        </a>
+        {% endfor %}
+      </nav>
 
-    <div class="p-4 border-t border-claude-border-light dark:border-claude-border-dark space-y-3">
-      <div class="text-xs space-y-2">
-        <div class="flex items-center justify-between text-claude-muted-light dark:text-claude-muted-dark">
-          <span class="text-[10px] uppercase tracking-wider">SMTP Akun</span>
-          <span class="text-[10px]">{% if smtp_ok %}<span class="text-green-500">Connected</span>{% else %}<span class="text-red-400">Not Set</span>{% endif %}</span>
+      <div class="sidebar-foot">
+        <div class="sf-row">
+          <span class="sf-label">SMTP Akun</span>
+          <span class="sf-value">{% if smtp_ok %}<span style="color:var(--success); font-weight:600;">Connected</span>{% else %}<span style="color:var(--destructive); font-weight:600;">Not Set</span>{% endif %}</span>
         </div>
         {% if smtp_ok %}
           {% for acct in smtp_accounts %}
             {% set rl = rate_limit.get(acct.key, {'used': 0, 'remaining': 30, 'max': 30, 'resets_in': 3600}) %}
-            <div class="bg-claude-bg-light dark:bg-claude-bg-dark rounded-lg px-2.5 py-2">
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] font-medium truncate mr-2" title="{{ acct.name }}">{{ acct.name }}</span>
-                <span class="tabular-nums text-[10px] shrink-0">{{ rl.used }}/{{ rl.max }}</span>
+            <div class="sf-account">
+              <div class="sf-row">
+                <span class="sf-name truncate" title="{{ acct.name }}">{{ acct.name }}</span>
+                <span class="sf-value mono">{{ rl.used }}/{{ rl.max }}</span>
               </div>
-              <div class="w-full bg-claude-border-light dark:bg-claude-border-dark rounded-full h-1">
-                <div class="bg-claude-accent-light dark:bg-claude-accent-dark h-1 rounded-full transition-all" style="width: {{ (rl.used / (rl.max or 1) * 100) | int }}%"></div>
-              </div>
-              <div class="flex justify-between text-[9px] text-claude-muted-light dark:text-claude-muted-dark mt-0.5">
-                <span>Sisa {{ rl.remaining }}</span>
+              <div class="rate-bar"><div style="width: {{ (rl.used / (rl.max or 1) * 100) | int }}%"></div></div>
+              <div class="sf-row">
+                <span class="sf-label">Sisa {{ rl.remaining }}</span>
                 {% if rl.used >= rl.max %}
-                <span class="text-amber-500 font-medium">Limit</span>
+                <span class="sf-label" style="color:var(--destructive);">Limit</span>
                 {% else %}
-                <span>Reset {{ rl.resets_in // 60 }}m</span>
+                <span class="sf-label">Reset {{ rl.resets_in // 60 }}m</span>
                 {% endif %}
               </div>
             </div>
           {% endfor %}
         {% endif %}
-      </div>
-      <div class="border-t border-claude-border-light dark:border-claude-border-dark pt-3 text-xs space-y-1.5">
-        <div class="flex justify-between text-claude-muted-light dark:text-claude-muted-dark">
-          <span>Harian (Gmail limit {{ gmail_daily_limit }})</span>
-          <span class="tabular-nums">{{ daily_sent }}/{{ gmail_daily_limit }}</span>
+        <div class="sf-account" style="border-top:1px solid var(--border); padding-top:12px;">
+          <div class="sf-row">
+            <span class="sf-label">Harian ({{ gmail_daily_limit }})</span>
+            <span class="sf-value mono">{{ daily_sent }}/{{ gmail_daily_limit }}</span>
+          </div>
+          <div class="rate-bar" style="height:6px;"><div style="width: {{ (daily_sent / (gmail_daily_limit or 1) * 100) | int }}%"></div></div>
         </div>
-        <div class="w-full bg-claude-border-light dark:bg-claude-border-dark rounded-full h-1">
-          <div class="bg-amber-500 h-1 rounded-full transition-all" style="width: {{ (daily_sent / (gmail_daily_limit or 1) * 100) | int }}%"></div>
+
+        <!-- Theme switcher -->
+        <div class="theme-popup" style="margin-top:14px;">
+          <input type="checkbox" id="theme-popup-checkbox" class="theme-popup__checkbox">
+          <button class="theme-popup__button" type="button" style="width:100%; justify-content:space-between;">
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <span class="theme-popup__icons">
+                <svg class="theme-popup__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              </span>
+              Ganti Tema
+            </span>
+            <svg class="theme-popup__chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="theme-popup__list-container">
+            <ul class="theme-popup__list" id="themeList">
+              {% set theme_options = [
+                ('', 'Light'),
+                ('dark', 'Dark'),
+                ('theme-sakura', 'Sakura'),
+                ('theme-bamboo', 'Bamboo'),
+                ('theme-cyberpunk', 'Cyberpunk'),
+                ('theme-mingyu', 'Mingyu'),
+                ('theme-ocean', 'Ocean'),
+                ('theme-retrolight', 'Retro'),
+              ] %}
+              {% for value, label in theme_options %}
+              <li><label onclick="closeThemePopup()"><input type="radio" name="apptheme" value="{{ value }}"><span>{{ label }}</span></label></li>
+              {% endfor %}
+            </ul>
+          </div>
         </div>
       </div>
-      <button onclick="toggleDark()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-claude-muted-light dark:text-claude-muted-dark hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40 transition">
-        <svg class="w-3.5 h-3.5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-        <svg class="w-3.5 h-3.5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-        <span class="dark:hidden">Dark Mode</span>
-        <span class="hidden dark:inline">Light Mode</span>
-      </button>
-    </div>
-  </aside>
+    </aside>
 
-  <!-- Main Content -->
-  <div class="md:ml-64 min-h-screen flex flex-col">
-    <!-- Mobile Top Bar -->
-    <div class="md:hidden sticky top-0 z-30 bg-claude-sidebar-light dark:bg-claude-sidebar-dark border-b border-claude-border-light dark:border-claude-border-dark px-4 py-3 flex items-center justify-between">
-      <button onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-      </button>
-      <span class="text-sm font-semibold">Lamaran Mailer</span>
-      <button onclick="toggleDark()" class="p-1.5 rounded-lg hover:bg-claude-border-light/40 dark:hover:bg-claude-border-dark/40">
-        <svg class="w-4 h-4 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-        <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-      </button>
-    </div>
-
-    <main class="flex-1">
-      {% block content_wrapper %}
-      <div class="max-w-3xl mx-auto py-6 md:py-10 px-4 md:px-8">
-      {% endblock %}
-        {% block content %}{% endblock %}
-      {% block content_wrapper_close %}
+    <!-- Main Content -->
+    <div class="main">
+      <div class="topbar">
+        <button class="icon-btn" onclick="toggleSidebar(true)" aria-label="Menu">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <span class="topbar-title">Lamaran Mailer</span>
+        <span></span>
       </div>
-      {% endblock %}
-    </main>
+
+      <main class="content">
+        {% block content_wrapper %}
+        <div class="page">
+        {% endblock %}
+          {% block content %}{% endblock %}
+        {% block content_wrapper_close %}
+        </div>
+        {% endblock %}
+      </main>
+    </div>
   </div>
 
   <script>
+    // ── Theme ──
+    const THEMES = ['', 'dark', 'theme-sakura', 'theme-bamboo', 'theme-cyberpunk', 'theme-mingyu', 'theme-ocean', 'theme-retrolight'];
+    function applyTheme(name) {
+      document.body.classList.remove(...THEMES);
+      if (name) document.body.classList.add(name);
+      localStorage.setItem('lm-theme', name);
+      document.querySelectorAll('#themeList input').forEach(r => { r.checked = r.value === name; });
+    }
+    function closeThemePopup() {
+      document.getElementById('theme-popup-checkbox').checked = false;
+    }
+    document.querySelectorAll('#themeList input').forEach(r => {
+      r.addEventListener('change', e => applyTheme(e.target.value));
+    });
+    (function() {
+      applyTheme(localStorage.getItem('lm-theme') || 'dark');
+    })();
+
+    // ── Sidebar ──
+    function toggleSidebar(open) {
+      const sb = document.getElementById('sidebar');
+      const ov = document.getElementById('sidebarOverlay');
+      const show = typeof open === 'undefined' ? !sb.classList.contains('open') : open;
+      sb.classList.toggle('open', show);
+      ov.classList.toggle('show', show);
+    }
+
     // ── Modal ──
     let _modalCallback = null;
-
     function showModal(message, btnText, callback) {
       document.getElementById('modalMessage').textContent = message;
       const btn = document.getElementById('modalConfirmBtn');
       btn.textContent = btnText || 'Hapus';
-      btn.className = btnText === 'Kirim' || btnText === 'Ya'
-        ? 'bg-claude-accent-light dark:bg-claude-accent-dark hover:bg-claude-accentHover-light dark:hover:bg-claude-accentHover-dark text-white font-medium py-2 px-5 rounded-xl transition text-sm'
-        : 'bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-5 rounded-xl transition text-sm';
+      btn.className = 'btn ' + (btnText === 'Kirim' || btnText === 'Ya' ? 'btn-primary' : 'btn-danger');
       _modalCallback = callback;
-      document.getElementById('modalOverlay').classList.remove('hidden');
+      document.getElementById('modalOverlay').classList.add('show');
     }
-
     function closeModal() {
-      document.getElementById('modalOverlay').classList.add('hidden');
+      document.getElementById('modalOverlay').classList.remove('show');
       _modalCallback = null;
     }
-
     document.getElementById('modalConfirmBtn').addEventListener('click', function() {
       if (_modalCallback) _modalCallback();
       closeModal();
@@ -228,22 +411,24 @@
 
     // ── Global ──
     document.addEventListener('DOMContentLoaded', function() {
-      const toast = document.querySelector('.toast');
-      if (toast) setTimeout(() => toast.remove(), 4000);
+      // Auto-dismiss toast
+      document.querySelectorAll('.toast-msg').forEach(t => {
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 250); }, 4000);
+      });
 
-      // Loading spinner on form submit
+      // Loading state on submit
       document.querySelectorAll('form[data-loading]').forEach(form => {
         form.addEventListener('submit', function() {
           const btn = this.querySelector('button[type="submit"]');
           if (btn) {
             btn.disabled = true;
             btn.dataset.originalText = btn.innerHTML;
-            btn.innerHTML = '<span class="spinner"></span> Loading...';
+            btn.innerHTML = 'Mengirim...';
           }
         });
       });
 
-      // Custom modal confirm via data-confirm attribute
+      // Custom modal confirm via data-confirm
       document.querySelectorAll('form[data-confirm]').forEach(form => {
         form.addEventListener('submit', function(e) {
           e.preventDefault();
@@ -261,11 +446,6 @@
         });
       });
     });
-
-    function extractConfirmMsg(fn) {
-      const m = fn.match(/confirm\(['"](.+?)['"]\)/);
-      return m ? m[1] : 'Yakin?';
-    }
 
     const _companyDebounce = {};
     function companySearch(query, datalistId) {

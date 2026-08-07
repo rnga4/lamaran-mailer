@@ -77,6 +77,43 @@
     }
     .icon-btn:hover { background: var(--muted); }
     .icon-btn svg { width: 18px; height: 18px; }
+
+    /* Hamburger animasi (terinspirasi Uiverse.io — Ali-Tahmazi99).
+       Selector di-scope ke .menu-toggle: aturan global `input[type=checkbox]`
+       asli akan ikut menyembunyikan checkbox bulk-select di History & radio
+       tema. Warna pakai var(--foreground) agar mengikuti tema aktif. */
+    .menu-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      position: relative; cursor: pointer;
+      width: 44px; height: 36px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: transparent;
+    }
+    .menu-toggle:hover { background: var(--muted); }
+    .menu-toggle__checkbox {
+      position: absolute; opacity: 0; pointer-events: none;
+      -webkit-appearance: none; appearance: none;
+    }
+    .menu-toggle__bar {
+      position: absolute; left: 50%; top: 50%;
+      width: 22px; height: 3px;
+      background: var(--foreground); border-radius: 100px;
+      display: inline-block; transition: 0.3s ease;
+    }
+    .menu-toggle__bar.top    { transform: translate(-50%, calc(-50% - 8px)); }
+    .menu-toggle__bar.middle { transform: translate(-50%, -50%); }
+    .menu-toggle__bar.bottom { transform: translate(-50%, calc(-50% + 8px)); }
+    .menu-toggle__checkbox:checked ~ .menu-toggle__bar.top {
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+    .menu-toggle__checkbox:checked ~ .menu-toggle__bar.middle {
+      transform: translate(-50%, -50%) translateX(-14px);
+      opacity: 0;
+    }
+    .menu-toggle__checkbox:checked ~ .menu-toggle__bar.bottom {
+      transform: translate(-50%, -50%) rotate(-45deg);
+      box-shadow: 0 0 10px color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+    }
     .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; display: none; }
     .sidebar-overlay.show { display: block; }
 
@@ -212,25 +249,73 @@
       .topbar { display: flex; }
       .content { padding: 22px 16px 8vh; }
     }
+
+    /* Dropdown tema dibuka ke ATAS — tombolnya ada di bagian bawah sidebar */
+    .theme-popup__list-container {
+      top: auto;
+      bottom: calc(var(--btn_height) + var(--list_offset));
+    }
+
+    /* ── Toast kompak di pojok kanan atas (template memakai #toast-container;
+       markup di base.html sudah dibungkus container ini) ── */
+    #toast-container {
+      top: 16px;
+      right: 16px;
+      max-width: 340px;
+      gap: 10px;
+    }
+    #toast-container .toast-msg {
+      min-height: 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+      animation: toastIn 0.25s ease;
+    }
+    #toast-container .toast-msg .toast-icon-container {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+    }
+    #toast-container .toast-msg .toast-message-text {
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(16px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
   </style>
 </head>
 <body class="dark">
+<script>
+  // Terapkan tema tersimpan SEGERA setelah <body> dibuka, sebelum konten
+  // dirender — mencegah halaman tampil dark dulu lalu berubah (flash) setiap
+  // pindah menu/path. localStorage dipakai oleh fungsi applyTheme di bawah.
+  (function () {
+    try {
+      var t = localStorage.getItem('lm-theme');
+      if (t !== null) document.body.className = t;
+    } catch (e) { /* localStorage tidak tersedia — biarkan default dark */ }
+  })();
+</script>
 
-  <!-- Toast -->
+  <!-- Toast (dibungkus #toast-container agar tampil fixed di pojok kanan atas) -->
   {% if message %}
-  <div class="toast-msg toast-{% if msg_type == 'success' %}success{% elif msg_type == 'warning' %}warning{% elif msg_type == 'error' %}error{% else %}info{% endif %}">
-    <span class="toast-icon-container">
-      <svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        {% if msg_type == 'success' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        {% elif msg_type == 'warning' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        {% else %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>{% endif %}
-      </svg>
-    </span>
-    <div class="toast-message-text-container">
-      <p class="toast-message-text">{{ message }}</p>
+  <div id="toast-container">
+    <div class="toast-msg toast-{% if msg_type == 'success' %}success{% elif msg_type == 'warning' %}warning{% elif msg_type == 'error' %}error{% else %}info{% endif %}">
+      <span class="toast-icon-container">
+        <svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {% if msg_type == 'success' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          {% elif msg_type == 'warning' %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          {% else %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>{% endif %}
+        </svg>
+      </span>
+      <div class="toast-message-text-container">
+        <p class="toast-message-text">{{ message }}</p>
+      </div>
+      <svg class="toast-cross-icon" onclick="this.closest('.toast-msg').remove()" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      <span class="toast-progress" style="animation-duration:4s"></span>
     </div>
-    <svg class="toast-cross-icon" onclick="this.closest('.toast-msg').remove()" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-    <span class="toast-progress" style="animation-duration:4s"></span>
   </div>
   {% endif %}
 
@@ -310,7 +395,7 @@
         <!-- Theme switcher -->
         <div class="theme-popup" style="margin-top:14px;">
           <input type="checkbox" id="theme-popup-checkbox" class="theme-popup__checkbox">
-          <button class="theme-popup__button" type="button" style="width:100%; justify-content:space-between;">
+          <label class="theme-popup__button" for="theme-popup-checkbox" style="width:100%; justify-content:space-between; cursor:pointer;">
             <span style="display:inline-flex; align-items:center; gap:6px;">
               <span class="theme-popup__icons">
                 <svg class="theme-popup__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -318,7 +403,7 @@
               Ganti Tema
             </span>
             <svg class="theme-popup__chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-          </button>
+          </label>
           <div class="theme-popup__list-container">
             <ul class="theme-popup__list" id="themeList">
               {% set theme_options = [
@@ -332,20 +417,36 @@
                 ('theme-retrolight', 'Retro'),
               ] %}
               {% for value, label in theme_options %}
-              <li><label onclick="closeThemePopup()"><input type="radio" name="apptheme" value="{{ value }}"><span>{{ label }}</span></label></li>
+              <li>
+                <label onclick="closeThemePopup()" style="cursor:pointer;">
+                  <input type="radio" name="apptheme" value="{{ value }}">
+                  <span class="theme-popup__icons">
+                    <svg class="theme-popup__check" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  </span>
+                  <span>{{ label }}</span>
+                </label>
+              </li>
               {% endfor %}
             </ul>
           </div>
         </div>
+        {% if auth_enabled %}
+        <form method="post" action="/logout" style="margin-top:12px;">
+          <button type="submit" class="btn btn-sm btn-ghost" style="width:100%;">Keluar</button>
+        </form>
+        {% endif %}
       </div>
     </aside>
 
     <!-- Main Content -->
     <div class="main">
       <div class="topbar">
-        <button class="icon-btn" onclick="toggleSidebar(true)" aria-label="Menu">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
+        <label class="menu-toggle" for="menuCheckbox" aria-label="Menu">
+          <input type="checkbox" id="menuCheckbox" class="menu-toggle__checkbox">
+          <span class="menu-toggle__bar top"></span>
+          <span class="menu-toggle__bar middle"></span>
+          <span class="menu-toggle__bar bottom"></span>
+        </label>
         <span class="topbar-title">Lamaran Mailer</span>
         <span></span>
       </div>
@@ -364,12 +465,16 @@
 
   <script>
     // ── Theme ──
-    const THEMES = ['', 'dark', 'theme-sakura', 'theme-bamboo', 'theme-cyberpunk', 'theme-mingyu', 'theme-ocean', 'theme-retrolight'];
-    function applyTheme(name) {
+    // CATATAN: jangan masukkan '' di sini — classList.remove('') melempar SyntaxError
+    // sehingga applyTheme tidak pernah berjalan (tema tidak bisa diganti).
+    const THEMES = ['dark', 'theme-sakura', 'theme-bamboo', 'theme-cyberpunk', 'theme-mingyu', 'theme-ocean', 'theme-retrolight'];
+    function applyTheme(name, animate) {
+      if (animate !== false) document.body.classList.add('theme-transitioning');
       document.body.classList.remove(...THEMES);
       if (name) document.body.classList.add(name);
       localStorage.setItem('lm-theme', name);
       document.querySelectorAll('#themeList input').forEach(r => { r.checked = r.value === name; });
+      if (animate !== false) setTimeout(() => document.body.classList.remove('theme-transitioning'), 400);
     }
     function closeThemePopup() {
       document.getElementById('theme-popup-checkbox').checked = false;
@@ -378,7 +483,12 @@
       r.addEventListener('change', e => applyTheme(e.target.value));
     });
     (function() {
-      applyTheme(localStorage.getItem('lm-theme') || 'dark');
+      // Load awal: tanpa animasi (tema sudah diterapkan oleh script di atas <body>)
+      // PENTING: jangan pakai `|| 'dark'` — string kosong (tema Light) itu nilai
+      // localStorage yang VALID. `'' || 'dark'` akan mengubah Light jadi dark
+      // dan menimpa preferensi user di setiap halaman.
+      var saved = localStorage.getItem('lm-theme');
+      applyTheme(saved === null ? 'dark' : saved, false);
     })();
 
     // ── Sidebar ──
@@ -388,7 +498,14 @@
       const show = typeof open === 'undefined' ? !sb.classList.contains('open') : open;
       sb.classList.toggle('open', show);
       ov.classList.toggle('show', show);
+      // Sinkronkan hamburger animasi dengan state sidebar
+      const cb = document.getElementById('menuCheckbox');
+      if (cb) cb.checked = show;
     }
+    // Klik hamburger (label) → checkbox berubah → sidebar ikut terbuka/tertutup
+    document.getElementById('menuCheckbox').addEventListener('change', function () {
+      toggleSidebar(this.checked);
+    });
 
     // ── Modal ──
     let _modalCallback = null;

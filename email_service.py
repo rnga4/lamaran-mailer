@@ -1,3 +1,4 @@
+import html
 import os
 import random
 import re
@@ -54,58 +55,82 @@ Hormat saya,
 {sender_phone}
 {sender_email}
 {sender_linkedin}
+{sender_github}
 """
 
 HTML_TEMPLATE = """\
 <!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
-  p {{ margin: 0 0 12px 0; }}
-  .signature {{ margin-top: 20px; color: #555; }}
-  .divider {{ border-top: 2px solid #e0e0e0; margin: 20px 0; }}
-  .contact-buttons {{ margin-top: 12px; }}
-  .contact-buttons a {{
-    display: inline-block;
-    padding: 8px 18px;
-    margin: 4px 6px 4px 0;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 500;
-    color: #fff;
-  }}
-  .btn-wa {{ background-color: #25D366; }}
-  .btn-wa:hover {{ background-color: #1ebe57; }}
-  .btn-email {{ background-color: #1a73e8; }}
-  .btn-email:hover {{ background-color: #1557b0; }}
-  .btn-linkedin {{ background-color: #0077b5; }}
-  .btn-linkedin:hover {{ background-color: #005e93; }}
-</style>
-</head>
-<body>
-<p>{greeting}<br>{company},</p>
-
-<p>{opening}</p>
-
-<p>Saya berpengalaman sebagai IT Support / System Administrator dengan keahlian mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}</p>
-
-<p>Bersama email ini saya lampirkan CV dan dokumen pendukung lainnya untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
-
-<p>{closing}</p>
-
-<div class="divider"></div>
-
-<div class="signature">
-  <p><strong>Hormat saya,</strong><br>{sender_name}</p>
-  <div class="contact-buttons">
-    <a href="{wa_link}" class="btn-wa">WhatsApp</a>
-    <a href="mailto:{sender_email}" class="btn-email">Email</a>
-    <a href="{linkedin_url}" class="btn-linkedin">LinkedIn</a>
-  </div>
-</div>
+<html lang="id">
+<body style="margin:0;padding:0;background-color:#eef1f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef1f7;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e4e8f1;box-shadow:0 10px 30px rgba(30,40,90,0.08);overflow:hidden;">
+          <tr>
+            <td style="height:6px;font-size:0;line-height:0;background-color:#4f46e5;background:linear-gradient(90deg,#4f46e5,#8b5cf6);">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px 4px 40px;">
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#9aa1b5;margin-bottom:10px;">Surat Lamaran Kerja</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:26px;font-weight:800;color:#1b2134;line-height:1.25;">{position}</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#4f46e5;margin-top:5px;">di {company}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 2px 40px;">
+              <div style="border-top:1px solid #eceff6;font-size:0;line-height:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:6px 40px 2px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.8;color:#3d4354;">
+              <p style="margin:0 0 14px 0;">{greeting},</p>
+              <p style="margin:0 0 14px 0;">{opening}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6fd;border-left:4px solid #4f46e5;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.75;color:#414a5e;">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#4f46e5;margin-bottom:6px;">Pengalaman &amp; Keahlian</div>
+                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 2px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.8;color:#3d4354;">
+              <p style="margin:0 0 14px 0;">Bersama email ini saya lampirkan CV dan dokumen pendukung untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
+              <p style="margin:0 0 14px 0;">{closing}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 40px 2px 40px;">
+              <div style="border-top:1px solid #eceff6;font-size:0;line-height:0;margin-bottom:18px;">&nbsp;</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:#3d4354;line-height:1.6;">
+                <span style="color:#1b2134;font-weight:700;">Hormat saya,</span><br>
+                <span style="font-size:17px;font-weight:800;color:#1b2134;">{sender_name}</span>
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                <tr>
+                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#25D366;text-decoration:none;">WhatsApp</a></td>
+                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#1a73e8;text-decoration:none;">Email</a></td>
+                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
+                  <td><a href="{github_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 40px 26px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;color:#a0a7ba;line-height:1.6;">
+              {sender_email} &middot; {sender_phone} &middot; {sender_linkedin}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>"""
 
@@ -120,10 +145,261 @@ def is_valid_email(email: str) -> bool:
     return bool(EMAIL_RE.match(email.strip()))
 
 
+HTML_TEMPLATE_MINIMAL = """\
+<!DOCTYPE html>
+<html lang="id">
+<body style="margin:0;padding:0;background-color:#fafafa;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fafafa;padding:48px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #e8e8e8;border-radius:8px;">
+          <tr>
+            <td style="padding:44px 44px 6px 44px;">
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#9ca3af;margin-bottom:18px;">Lamaran Kerja</div>
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:24px;font-weight:300;color:#111111;line-height:1.3;letter-spacing:-0.2px;">{position}</div>
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:400;color:#111111;margin-top:6px;">{company}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 44px 0 44px;">
+              <div style="border-top:1px solid #eeeeee;font-size:0;line-height:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 44px 4px 44px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.9;color:#333333;">
+              <p style="margin:0 0 16px 0;">{greeting},</p>
+              <p style="margin:0 0 16px 0;">{opening}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 44px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-left:2px solid #111111;padding:2px 0 2px 18px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13.5px;line-height:1.85;color:#444444;">
+                    IT Support / System Administrator &mdash; mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 44px 4px 44px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.9;color:#333333;">
+              <p style="margin:0 0 16px 0;">Bersama email ini saya lampirkan CV untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
+              <p style="margin:0 0 16px 0;">{closing}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 44px 4px 44px;">
+              <div style="border-top:1px solid #eeeeee;font-size:0;line-height:0;margin-bottom:24px;">&nbsp;</div>
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:15px;color:#111111;">
+                <span style="color:#9ca3af;font-size:12px;">Hormat saya,</span><br>
+                <span style="font-size:17px;font-weight:600;color:#111111;">{sender_name}</span>
+              </div>
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:12.5px;color:#6b7280;margin-top:10px;line-height:1.7;">
+                <a href="{wa_link}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">WhatsApp</a>
+                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
+                <a href="mailto:{sender_email}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">{sender_email}</a>
+                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
+                <a href="{linkedin_url}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">LinkedIn</a>
+                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
+                <a href="{github_url}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">GitHub</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 44px 36px 44px;">
+              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:10.5px;color:#b0b3b8;line-height:1.6;text-align:center;border-top:1px solid #f2f2f2;padding-top:16px;">
+                {sender_email} &middot; {sender_phone} &middot; {sender_linkedin}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+HTML_TEMPLATE_DARK = """\
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#0f1222;color-scheme:dark;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0f1222;padding:40px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#161a2e;border:1px solid #2a3050;border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="height:5px;font-size:0;line-height:0;background-color:#e8b64c;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:34px 40px 2px 40px;">
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#e8b64c;margin-bottom:10px;">Surat Lamaran Kerja</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.25;">{position}</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#e8b64c;margin-top:5px;">di {company}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 2px 40px;">
+              <div style="border-top:1px solid #2a3050;font-size:0;line-height:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 40px 2px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.85;color:#c7cbe0;">
+              <p style="margin:0 0 14px 0;">{greeting},</p>
+              <p style="margin:0 0 14px 0;">{opening}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#1c2138;border-left:4px solid #e8b64c;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.75;color:#b9bfd9;">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#e8b64c;margin-bottom:6px;">Pengalaman &amp; Keahlian</div>
+                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 40px 2px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.85;color:#c7cbe0;">
+              <p style="margin:0 0 14px 0;">Bersama email ini saya lampirkan CV dan dokumen pendukung untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
+              <p style="margin:0 0 14px 0;">{closing}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 40px 2px 40px;">
+              <div style="border-top:1px solid #2a3050;font-size:0;line-height:0;margin-bottom:18px;">&nbsp;</div>
+              <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;color:#c7cbe0;line-height:1.6;">
+                <span style="color:#e8b64c;font-weight:700;">Hormat saya,</span><br>
+                <span style="font-size:17px;font-weight:700;color:#ffffff;">{sender_name}</span>
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                <tr>
+                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#25D366;text-decoration:none;">WhatsApp</a></td>
+                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#1a73e8;text-decoration:none;">Email</a></td>
+                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
+                  <td><a href="{github_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:4px 40px 26px 40px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;color:#6b7299;line-height:1.6;">
+              {sender_email} &middot; {sender_phone} &middot; {sender_linkedin}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+HTML_TEMPLATE_EDITORIAL = """\
+<!DOCTYPE html>
+<html lang="id">
+<body style="margin:0;padding:0;background-color:#f6f1e7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f6f1e7;padding:48px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;width:100%;background-color:#fffdf7;border:1px solid #e5dcc8;border-top:4px solid #8c2f39;border-radius:4px;">
+          <tr>
+            <td style="padding:36px 44px 2px 44px;border-bottom:1px solid #ece4d2;">
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:10.5px;font-weight:700;letter-spacing:3.5px;text-transform:uppercase;color:#8c2f39;margin-bottom:12px;">Surat Lamaran Kerja</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;color:#222222;line-height:1.3;">{position}</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:15px;font-style:italic;color:#8c2f39;margin-top:4px;margin-bottom:18px;">di {company}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px 44px 2px 44px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.95;color:#3a3a3a;">
+              <p style="margin:0 0 16px 0;">{greeting},</p>
+              <p style="margin:0 0 16px 0;">{opening}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 44px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#faf3e6;border-left:3px solid #8c2f39;">
+                <tr>
+                  <td style="padding:14px 20px;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;font-style:italic;line-height:1.8;color:#5a4632;">
+                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 44px 2px 44px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.95;color:#3a3a3a;">
+              <p style="margin:0 0 16px 0;">Bersama email ini saya lampirkan CV dan dokumen pendukung untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.</p>
+              <p style="margin:0 0 16px 0;">{closing}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 44px 2px 44px;">
+              <div style="border-top:1px solid #ece4d2;font-size:0;line-height:0;margin-bottom:22px;">&nbsp;</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#3a3a3a;line-height:1.6;">
+                <span style="color:#8c2f39;font-style:italic;font-size:13px;">Hormat saya,</span><br>
+                <span style="font-size:18px;font-weight:700;color:#222222;">{sender_name}</span>
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                <tr>
+                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#8c2f39;text-decoration:none;">WhatsApp</a></td>
+                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#3a3a3a;text-decoration:none;">Email</a></td>
+                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
+                  <td><a href="{github_url}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:6px 44px 30px 44px;font-family:Georgia,'Times New Roman',serif;font-size:11px;color:#b0a48c;line-height:1.6;">
+              {sender_email} &middot; {sender_phone} &middot; {sender_linkedin}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+# Registri desain email yang bisa dipilih di UI (index & batch).
+# id harus cocok dengan nama template bawaan di get_templates().
+EMAIL_DESIGNS = [
+    {
+        "id": "html",
+        "name": "Premium Klasik",
+        "desc": "Kartu profesional, gradien indigo & tombol kontak",
+    },
+    {
+        "id": "minimal",
+        "name": "Minimal Modern",
+        "desc": "Bersih, tipografi tegas, aksen halus",
+    },
+    {
+        "id": "dark",
+        "name": "Elegant Dark",
+        "desc": "Tema gelap navy, aksen emas — menonjol di inbox",
+    },
+    {
+        "id": "serif",
+        "name": "Editorial Serif",
+        "desc": "Gaya majalah: kertas krem, tipografi serif, burgundy",
+    },
+]
+
+
 def get_templates() -> dict[str, str]:
     return {
         "plain": BODY_TEMPLATE,
         "html": HTML_TEMPLATE,
+        "minimal": HTML_TEMPLATE_MINIMAL,
+        "dark": HTML_TEMPLATE_DARK,
+        "serif": HTML_TEMPLATE_EDITORIAL,
     }
 
 
@@ -137,11 +413,53 @@ def set_template(name: str, content: str) -> None:
     set_setting(f"template_{name}", content)
 
 
+def _build_default_variants(company: str, position: str) -> dict[str, str]:
+    """Satu set greeting/opening/closing acak + data pengirim.
+
+    Dipakai sekali per email lalu dibagi ke bagian plain-text & HTML
+    supaya kedua versi isinya konsisten (dan preview = email).
+    """
+    sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
+    sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
+    sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
+    sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
+    sender_github = os.environ.get("SENDER_GITHUB", "github.com/username")
+    phone_digits = re.sub(r"\D", "", sender_phone)
+    # Nomor lokal Indonesia (0xxx) → format internasional (62xxx) agar link
+    # wa.me benar: 08XXXXXXXXXX → https://wa.me/6282217739814
+    if phone_digits.startswith("0"):
+        phone_digits = "62" + phone_digits[1:]
+    wa_link = f"https://wa.me/{phone_digits}" if phone_digits else "#"
+    linkedin_url = ("https://" + sender_linkedin.removeprefix("https://")) if sender_linkedin else "#"
+    github_url = ("https://" + sender_github.removeprefix("https://")) if sender_github else "#"
+    return {
+        "greeting": random.choice(GREETING_VARIANTS),
+        "opening": random.choice(OPENING_VARIANTS).format(
+            sender_name=sender_name, position=position, company=company
+        ),
+        "closing": random.choice(CLOSING_VARIANTS).format(company=company),
+        "sender_name": sender_name,
+        "sender_phone": sender_phone,
+        "sender_email": sender_email,
+        "sender_linkedin": sender_linkedin,
+        "sender_github": sender_github,
+        "wa_link": wa_link,
+        "linkedin_url": linkedin_url,
+        "github_url": github_url,
+    }
+
+
+def build_variants(company: str, position: str) -> dict[str, str]:
+    """Public helper: satu set variabel acak untuk preview/email."""
+    return _build_default_variants(company, position)
+
+
 def render_body(
     company: str,
     position: str,
     extra: str = "",
     template_name: str = "plain",
+    variants: Optional[dict[str, str]] = None,
 ) -> str:
     from database import get_template_by_name
 
@@ -153,46 +471,36 @@ def render_body(
         from database import get_setting
         custom = get_setting(f"template_{template_name}")
         tpl = custom if custom else get_template(template_name)
-    extra_text = f" {extra}" if extra else ""
 
-    # Inject random greeting/opening/closing for default templates only
-    is_default = tpl in (get_template("plain"), get_template("html"))
-    extra_vars = {}
-    if is_default:
-        sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
-        sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
-        sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
-        sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
-        wa_link = "https://wa.me/" + re.sub(r"\D", "", sender_phone)
-        linkedin_url = "https://" + sender_linkedin.lstrip("https://")
-        extra_vars = {
-            "greeting": random.choice(GREETING_VARIANTS),
-            "opening": random.choice(OPENING_VARIANTS).format(
-                sender_name=sender_name, position=position, company=company
-            ),
-            "closing": random.choice(CLOSING_VARIANTS).format(company=company),
-            "sender_name": sender_name,
-            "sender_phone": sender_phone,
-            "sender_email": sender_email,
-            "sender_linkedin": sender_linkedin,
-            "wa_link": wa_link,
-            "linkedin_url": linkedin_url,
-        }
+    # 'extra' adalah teks biasa — escape di HTML agar tidak bisa menyelipkan
+    # HTML/script ke email maupun merusak halaman preview.
+    if extra:
+        extra_text = f" {html.escape(extra)}" if template_name != "plain" else f" {extra}"
+    else:
+        extra_text = ""
+
+    # Variabel variant (greeting/opening/closing/sender_*) selalu disuntik untuk
+    # SEMUA template — kwarg yang tidak dipakai oleh .format() otomatis diabaikan,
+    # jadi aman untuk template kustom yang hanya memakai {company}/{position}/{extra}.
+    if variants is None:
+        variants = _build_default_variants(company, position)
+    else:
+        # Variants parsial (mis. dari pemanggil eksternal): lengkapi dengan default
+        # supaya placeholder variant apa pun tetap tersubstitusi. Kunci yang
+        # bentrok dengan argumen .format() (company/position/extra) dibuang agar
+        # tidak memicu TypeError 'got multiple values'.
+        merged = _build_default_variants(company, position)
+        merged.update(variants)
+        for k in ("company", "position", "extra"):
+            merged.pop(k, None)
+        variants = merged
     try:
-        return tpl.format(company=company, position=position, extra=extra_text, **extra_vars)
+        return tpl.format(company=company, position=position, extra=extra_text, **variants)
     except KeyError as e:
-        if extra_vars:
-            try:
-                return tpl.format(company=company, position=position, extra=extra_text)
-            except KeyError as e2:
-                raise ValueError(
-                    f"Template menggunakan variabel {e2} yang tidak dikenal. "
-                    "Variabel yang tersedia: company, position, extra"
-                )
         raise ValueError(
             f"Template menggunakan variabel {e} yang tidak dikenal. "
-            "Variabel yang tersedia: company, position, extra" +
-            (", greeting, opening, closing, sender_name, sender_phone, sender_email, sender_linkedin, wa_link, linkedin_url" if is_default else "")
+            "Variabel yang tersedia: company, position, extra, greeting, opening, "
+            "closing, sender_name, sender_phone, sender_email, sender_linkedin, sender_github, wa_link, linkedin_url, github_url"
         )
 
 
@@ -207,8 +515,9 @@ def build_email(
     template_name: str = "html",
     additional_attachments: Optional[list[str]] = None,
 ) -> tuple[EmailMessage, str, str]:
-    plain_body = render_body(company, position, extra, "plain")
-    html_body = render_body(company, position, extra, template_name)
+    variants = _build_default_variants(company, position)
+    plain_body = render_body(company, position, extra, "plain", variants=variants)
+    html_body = render_body(company, position, extra, template_name, variants=variants)
 
     cv_file = Path(cv_path)
     if not cv_file.exists():

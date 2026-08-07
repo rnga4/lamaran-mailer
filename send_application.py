@@ -49,7 +49,7 @@ def main() -> None:
         print("\n[DRY RUN] Email tidak dikirim.")
         return
 
-    send_email(msg, host, port, user, password)
+    send_email(msg, host, port, user, password, use_ssl=(port == 465))
     print(f"\nEmail terkirim ke {args.to}")
 
 

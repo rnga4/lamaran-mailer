@@ -2,6 +2,9 @@ services:
   mailer:
     build: .
     env_file: .env
+    environment:
+      # "Hari" (limit harian Gmail & reset) mengikuti waktu lokal WIB
+      - TZ=Asia/Jakarta
     ports:
       - "8086:8000"
     volumes:

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Login — Lamaran Mailer{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width: 420px; margin: 6vh auto;">
+  <div class="card-title">Masuk</div>
+  <p class="muted" style="margin: -8px 0 22px; font-size: 0.88rem;">
+    Aplikasi ini dilindungi password. Masukkan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">APP_PASSWORD</code> yang diatur di <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">.env</code>.
+  </p>
+  <form method="post" action="/login" data-loading style="display: flex; flex-direction: column; gap: 16px;">
+    <input type="hidden" name="next" value="{{ next }}">
+    <div>
+      <label class="field-label">Password</label>
+      <input type="password" name="password" required autofocus class="field" placeholder="••••••••">
+    </div>
+    <button type="submit" class="btn btn-block">Masuk</button>
+  </form>
+</div>
+
+{% endblock %}

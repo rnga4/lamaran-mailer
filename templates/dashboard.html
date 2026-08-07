@@ -2,7 +2,10 @@
 {% block title %}Dashboard — Lamaran Mailer{% endblock %}
 {% block content %}
 
-<div class="section-title">Dashboard</div>
+<div class="flex between" style="align-items: center; flex-wrap: wrap;">
+  <div class="section-title" style="margin: 0;">Dashboard</div>
+  <a href="/backup/download" class="btn btn-sm btn-ghost" style="font-size: 0.8rem;">Download Backup (.db)</a>
+</div>
 
 <!-- Stats Cards -->
 <div class="stat-grid">
@@ -22,7 +25,7 @@
     <div class="card-label">Hari Ini</div>
     <div class="stat-value accent">{{ stats.today }}</div>
     <div class="progress" style="height: 6px; margin-top: 10px;"><div style="width: {{ (stats.today / (gmail_daily_limit or 1) * 100) | int }}%"></div></div>
-    <div class="muted" style="font-size: 0.68rem; margin-top: 5px;">{{ gmail_daily_limit - stats.today }} sisa dari {{ gmail_daily_limit }}</div>
+    <div class="muted" style="font-size: 0.68rem; margin-top: 5px;">{{ [0, gmail_daily_limit - stats.today] | max }} sisa dari {{ gmail_daily_limit }}</div>
   </div>
   <div class="card" style="margin-bottom: 0;">
     <div class="card-label">Perusahaan</div>
@@ -89,12 +92,16 @@
 
   <div class="card" style="margin-bottom: 0;">
     <div class="card-title">Per Akun SMTP</div>
-    {% if stats.by_account %}
+    {% if smtp_accounts %}
     <div>
-      {% for a in stats.by_account %}
+      {% for acct in smtp_accounts %}
+      {% set st = smtp_stats.get(acct.key, {'sent': 0, 'failed': 0}) %}
       <div class="list-row">
-        <span class="truncate">{{ a.smtp_account or 'default' }}</span>
-        <span class="mono" style="font-weight: 600;">{{ a.count }}</span>
+        <span class="truncate" title="{{ acct.key }}">{{ acct.name }}</span>
+        <span class="mono" style="font-weight: 600; white-space: nowrap;">
+          <span style="color: var(--success);">{{ st.sent }}</span> ok
+          / <span style="color: var(--destructive);">{{ st.failed }}</span> gagal
+        </span>
       </div>
       {% endfor %}
     </div>
@@ -120,7 +127,6 @@
     {% endif %}
   </div>
 </div>
-{% block scripts %}
 <script>
   let autoRefresh = true;
   setInterval(function() {
@@ -130,5 +136,4 @@
       .catch(() => { autoRefresh = false; });
   }, 30000);
 </script>
-{% endblock %}
 {% endblock %}

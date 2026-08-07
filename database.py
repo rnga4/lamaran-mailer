@@ -59,6 +59,10 @@ def init_db() -> None:
             rate_limited INTEGER NOT NULL DEFAULT 0,
             status TEXT NOT NULL DEFAULT 'running',
             last_error TEXT DEFAULT '',
+            filename TEXT DEFAULT '',
+            scheduled_at REAL DEFAULT 0,
+            resume_at REAL DEFAULT 0,
+            payload TEXT DEFAULT '',
             created_at REAL NOT NULL
         )
     """)
@@ -85,10 +89,16 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
     if "smtp_account" not in cols:
         conn.execute("ALTER TABLE emails ADD COLUMN smtp_account TEXT DEFAULT ''")
 
-    # Add filename column to batch_jobs if missing (legacy DBs)
+    # Add filename/scheduled_at/payload columns to batch_jobs if missing (legacy DBs)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(batch_jobs)").fetchall()]
     if "filename" not in cols:
         conn.execute("ALTER TABLE batch_jobs ADD COLUMN filename TEXT DEFAULT ''")
+    if "scheduled_at" not in cols:
+        conn.execute("ALTER TABLE batch_jobs ADD COLUMN scheduled_at REAL DEFAULT 0")
+    if "resume_at" not in cols:
+        conn.execute("ALTER TABLE batch_jobs ADD COLUMN resume_at REAL DEFAULT 0")
+    if "payload" not in cols:
+        conn.execute("ALTER TABLE batch_jobs ADD COLUMN payload TEXT DEFAULT ''")
 
     # Migrate old rate_limit (with id PK) to new per-account format (account_key PK)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(rate_limit)").fetchall()]
@@ -469,14 +479,21 @@ def get_all_rate_limits(max_per_hour: int = 30) -> dict[str, dict[str, int]]:
     return result
 
 
-def get_daily_sent_count() -> int:
+def get_daily_sent_count(account_key: str = "") -> int:
+    """Jumlah terkirim hari ini. Tanpa argumen = semua akun; dengan account_key = per akun."""
     _ensure_db()
     conn = _conn()
     today_midnight = int(datetime.datetime.combine(datetime.date.today(), datetime.time.min).timestamp())
-    row = conn.execute(
-        "SELECT COUNT(*) AS cnt FROM emails WHERE created_at >= ? AND status='sent'",
-        (today_midnight,),
-    ).fetchone()
+    if account_key:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM emails WHERE created_at >= ? AND status='sent' AND smtp_account = ?",
+            (today_midnight, account_key),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM emails WHERE created_at >= ? AND status='sent'",
+            (today_midnight,),
+        ).fetchone()
     conn.close()
     return row["cnt"] if row else 0
 
@@ -505,12 +522,45 @@ def get_all_templates() -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def get_template_names() -> list[str]:
+def get_db_path() -> str:
+    return str(DB_PATH)
+
+
+def create_backup(dest_path: str | Path) -> None:
+    """Salin DB ke path tujuan memakai API backup sqlite3 — konsisten walau
+    sedang ada penulisan lain (sending/rate limit)."""
+    _ensure_db()
+    dest = Path(dest_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    src = sqlite3.connect(str(DB_PATH))
+    try:
+        dst = sqlite3.connect(str(dest))
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+
+
+def get_smtp_account_stats() -> dict[str, dict[str, int]]:
+    """Per akun SMTP: jumlah terkirim vs gagal (dari riwayat email)."""
     _ensure_db()
     conn = _conn()
-    rows = conn.execute("SELECT name FROM templates ORDER BY created_at").fetchall()
+    rows = conn.execute(
+        "SELECT smtp_account, status, COUNT(*) as c FROM emails "
+        "WHERE smtp_account IS NOT NULL AND smtp_account != '' "
+        "GROUP BY smtp_account, status"
+    ).fetchall()
     conn.close()
-    return [r["name"] for r in rows]
+    result: dict[str, dict[str, int]] = {}
+    for r in rows:
+        acc = result.setdefault(r["smtp_account"], {"sent": 0, "failed": 0})
+        if r["status"] == "sent":
+            acc["sent"] = r["c"]
+        else:
+            acc["failed"] += r["c"]
+    return result
 
 
 def get_template_by_name(name: str) -> Optional[dict[str, str]]:
@@ -541,12 +591,17 @@ def delete_template(name: str) -> None:
     conn.close()
 
 
-def create_batch_job(total: int, filename: str = "") -> int:
+def create_batch_job(
+    total: int,
+    filename: str = "",
+    scheduled_at: float = 0,
+    payload: str = "",
+) -> int:
     _ensure_db()
     conn = _conn()
     cur = conn.execute(
-        "INSERT INTO batch_jobs (total, sent, failed, rate_limited, status, filename, created_at) VALUES (?, 0, 0, 0, 'queued', ?, ?)",
-        (total, filename, time.time()),
+        "INSERT INTO batch_jobs (total, sent, failed, rate_limited, status, filename, scheduled_at, payload, created_at) VALUES (?, 0, 0, 0, 'queued', ?, ?, ?, ?)",
+        (total, filename, scheduled_at, payload, time.time()),
     )
     job_id = cur.lastrowid
     conn.commit()
@@ -560,7 +615,7 @@ def update_batch_job(job_id: int, **kwargs: Any) -> None:
     sets: list[str] = []
     vals: list[Any] = []
     for k, v in kwargs.items():
-        if k in ("sent", "failed", "rate_limited", "status", "last_error"):
+        if k in ("sent", "failed", "rate_limited", "status", "last_error", "scheduled_at", "resume_at"):
             sets.append(f"{k}=?")
             vals.append(v)
     if sets:
@@ -570,20 +625,84 @@ def update_batch_job(job_id: int, **kwargs: Any) -> None:
     conn.close()
 
 
-def get_batch_job(job_id: int) -> Optional[dict[str, Any]]:
+def get_batch_job(job_id: int, with_payload: bool = False) -> Optional[dict[str, Any]]:
     _ensure_db()
     conn = _conn()
     row = conn.execute("SELECT * FROM batch_jobs WHERE id=?", (job_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+    job = dict(row)
+    if not with_payload:
+        job["has_payload"] = bool(job.pop("payload", ""))
+    return job
 
 
 def cancel_batch_job(job_id: int) -> None:
     _ensure_db()
     conn = _conn()
-    conn.execute("UPDATE batch_jobs SET status='cancelled' WHERE id=? AND status IN ('running', 'queued')", (job_id,))
+    conn.execute("UPDATE batch_jobs SET status='cancelled' WHERE id=? AND status IN ('running', 'queued', 'paused')", (job_id,))
     conn.commit()
     conn.close()
+
+
+def pause_batch_job(job_id: int, resume_at: float = 0, last_error: str = "") -> None:
+    """Jeda sementara batch yang sedang berjalan / menunggu. Kalau resume_at
+    diisi, worker akan melanjutkannya otomatis saat waktunya tiba (mis. besok
+    setelah batas harian Gmail reset)."""
+    _ensure_db()
+    conn = _conn()
+    conn.execute(
+        "UPDATE batch_jobs SET status='paused', resume_at=?, last_error=? WHERE id=? AND status IN ('running', 'queued')",
+        (resume_at, last_error, job_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def resume_batch_job(job_id: int) -> None:
+    """Lanjutkan batch yang dijeda (kembali ke antrian) dan hapus jadwal
+    auto-lanjut bila ada."""
+    _ensure_db()
+    conn = _conn()
+    conn.execute("UPDATE batch_jobs SET status='queued', resume_at=0 WHERE id=? AND status='paused'", (job_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_auto_resumable_paused_jobs() -> list[dict[str, Any]]:
+    """Batch berstatus 'paused' yang waktunya lanjut otomatis sudah tiba
+    (resume_at di masa lalu) — dipakai worker untuk melanjutkannya."""
+    _ensure_db()
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT * FROM batch_jobs WHERE status='paused' AND resume_at > 0 AND resume_at <= ? ORDER BY resume_at ASC",
+        (time.time(),),
+    ).fetchall()
+    conn.close()
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        j = dict(row)
+        j["has_payload"] = bool(j.pop("payload", ""))
+        result.append(j)
+    return result
+
+
+def retry_batch_job(job_id: int) -> int:
+    """Kirim ulang batch gagal/dibatalkan/selesai-ber-error. Worker akan
+    melewati email yang sudah terkirim (dari counter tersimpan) dan mencoba
+    ulang sisanya yang gagal/rate-limited/belum sempat dicoba.
+    Mengembalikan jumlah baris yang ter-update (0 = status sudah berubah
+    sejak dicek, mis. jadi running)."""
+    _ensure_db()
+    conn = _conn()
+    cur = conn.execute(
+        "UPDATE batch_jobs SET status='queued', last_error='' WHERE id=? AND status IN ('failed', 'done', 'cancelled')",
+        (job_id,),
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount
 
 
 def get_batch_jobs(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
@@ -594,34 +713,53 @@ def get_batch_jobs(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
         (limit, offset),
     ).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        j = dict(row)
+        j["has_payload"] = bool(j.pop("payload", ""))
+        result.append(j)
+    return result
 
 
 def get_active_batch_jobs() -> list[dict[str, Any]]:
     _ensure_db()
     conn = _conn()
     rows = conn.execute(
-        "SELECT * FROM batch_jobs WHERE status IN ('running', 'queued') ORDER BY created_at ASC"
+        "SELECT * FROM batch_jobs WHERE status IN ('running', 'queued', 'paused') "
+        "ORDER BY CASE WHEN status='running' THEN 0 ELSE 1 END, created_at ASC"
     ).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        j = dict(row)
+        j["has_payload"] = bool(j.pop("payload", ""))
+        result.append(j)
+    return result
 
 
-def get_queued_batch_jobs() -> list[dict[str, Any]]:
+def get_queued_batch_jobs(with_payload: bool = False) -> list[dict[str, Any]]:
     _ensure_db()
     conn = _conn()
     rows = conn.execute(
         "SELECT * FROM batch_jobs WHERE status='queued' ORDER BY created_at ASC"
     ).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        j = dict(row)
+        if not with_payload:
+            j["has_payload"] = bool(j.pop("payload", ""))
+        result.append(j)
+    return result
 
 
 def fail_stale_running_jobs() -> None:
+    """Job yang 'running' saat server mati/restart diubah jadi 'paused' — bukan
+    gagal — karena payload tersimpan di DB, jadi bisa dilanjutkan."""
     _ensure_db()
     conn = _conn()
     conn.execute(
-        "UPDATE batch_jobs SET status='failed', last_error='Server restart, batch dibatalkan' WHERE status='running'"
+        "UPDATE batch_jobs SET status='paused', last_error='Server restart, batch dijeda - klik Lanjutkan untuk meneruskan' WHERE status='running'"
     )
     conn.commit()
     conn.close()

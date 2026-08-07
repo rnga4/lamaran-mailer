@@ -20,6 +20,10 @@
       <p>{{ preview.position }}</p>
     </div>
     <div>
+      <div class="card-label">Desain</div>
+      <p>{% set found = email_designs | selectattr('id', 'equalto', preview.template_name) | first %}{{ found.name if found else preview.template_name }}</p>
+    </div>
+    <div>
       <div class="card-label">CV</div>
       <p>{{ preview.cv_file }}</p>
     </div>
@@ -46,9 +50,12 @@
   <div class="preview-block">
     <div class="card-label">HTML Preview</div>
     <div class="frame">
-      <iframe srcdoc="{{ preview.html_body | safe }}" style="min-height: 420px; border: none; width: 100%; display: block;" onload="this.style.height = this.contentDocument.body.scrollHeight + 40 + 'px'"></iframe>
+      <iframe id="htmlPreview" style="min-height: 420px; border: none; width: 100%; display: block;" onload="this.style.height = this.contentDocument.body.scrollHeight + 40 + 'px'"></iframe>
     </div>
   </div>
+  <script>
+    document.getElementById('htmlPreview').srcdoc = {{ preview.html_body | tojson }};
+  </script>
 
   <div class="flex" style="gap: 12px; flex-wrap: wrap;">
     <form method="post" action="/send" data-loading style="flex: 1; min-width: 220px;">
@@ -57,6 +64,7 @@
       <input type="hidden" name="position" value="{{ preview.position }}">
       <input type="hidden" name="extra" value="{{ preview.extra }}">
       <input type="hidden" name="cv_file" value="{{ preview.cv_file }}">
+      <input type="hidden" name="template_name" value="{{ preview.template_name }}">
       <button type="submit" class="btn btn-block">Kirim Sekarang</button>
     </form>
     <a href="/" class="btn btn-ghost" style="flex: 1; min-width: 220px;">Kembali</a>
@@ -85,24 +93,31 @@
         <label class="field-label">Nama Perusahaan</label>
         <input type="text" name="company" required placeholder="PT Contoh Sejahtera" list="companies"
           value="{{ request.query_params.get('company', '') }}" oninput="companySearch(this.value, 'companies')" class="field">
-      </div>
-      <div>
-        <label class="field-label">Posisi</label>
-        <input type="text" name="position" value="{{ request.query_params.get('position', default_position) }}" class="field">
-      </div>
-      <div>
-        <label class="field-label">CV (PDF)</label>
-        {% if cv_files %}
-        <select name="cv_file" class="field">
-          {% for f in cv_files %}
-          <option value="{{ f }}" {% if request.query_params.get('cv_file') == f or (not request.query_params.get('cv_file') and 'ID' in f) %}selected{% endif %}>{{ f }}</option>
-          {% endfor %}
-        </select>
-        {% else %}
-        <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
-        {% endif %}
-      </div>
+      </div>    <div>
+      <label class="field-label">Posisi</label>
+      <input type="text" name="position" value="{{ request.query_params.get('position', default_position) }}" class="field">
     </div>
+    <div>
+      <label class="field-label">CV (PDF)</label>
+      {% if cv_files %}
+      <select name="cv_file" class="field">
+        {% for f in cv_files %}
+        <option value="{{ f }}" {% if request.query_params.get('cv_file') == f or (not request.query_params.get('cv_file') and 'ID' in f) %}selected{% endif %}>{{ f }}</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
+      {% endif %}
+    </div>
+  </div>
+  <div>
+    <label class="field-label">Desain Email</label>
+    <select name="template_name" class="field">
+      {% for d in email_designs %}
+      <option value="{{ d.id }}" {% if request.query_params.get('template_name') == d.id or (not request.query_params.get('template_name') and d.id == 'html') %}selected{% endif %}>{{ d.name }}{% if d.desc %} — {{ d.desc }}{% endif %}</option>
+      {% endfor %}
+    </select>
+  </div>
     <div>
       <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
       <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..." class="field">{{ request.query_params.get('extra', '') }}</textarea>

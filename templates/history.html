@@ -9,7 +9,7 @@
   <div class="flex between" style="padding: 22px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 12px;">
     <h2 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 600;">History Email</h2>
     <div class="flex">
-      <a href="/history/export?search={{ search }}&status={{ status_filter }}&account={{ account_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-sm">Export CSV</a>
+      <a href="/history/export?search={{ search | urlencode }}&status={{ status_filter | urlencode }}&account={{ account_filter | urlencode }}&date_from={{ date_from | urlencode }}&date_to={{ date_to | urlencode }}" class="btn btn-sm">Export CSV</a>
       <form method="post" action="/history/clear" class="inline" data-confirm="Hapus semua history?">
         <button type="submit" class="btn btn-sm btn-danger">Clear All</button>
       </form>
@@ -55,19 +55,21 @@
     </form>
   </div>
 
-  <form id="bulkForm" method="post" action="/history/bulk-delete">
-    <div class="flex" style="padding: 12px 24px; border-bottom: 1px solid var(--border); gap: 16px; {% if not emails %}display: none;{% endif %}">
-      <label class="flex" style="gap: 8px; font-size: 0.82rem; color: var(--muted-foreground); cursor: pointer;">
-        <input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)">
-        Pilih Semua
-      </label>
-      <button type="submit" id="bulkDeleteBtn" disabled class="btn btn-sm btn-danger">
-        Hapus Terpilih (<span id="selectedCount">0</span>)
-      </button>
-    </div>
+  <div class="flex" style="padding: 12px 24px; border-bottom: 1px solid var(--border); gap: 16px; {% if not emails %}display: none;{% endif %}">
+    <label class="flex" style="gap: 8px; font-size: 0.82rem; color: var(--muted-foreground); cursor: pointer;">
+      <input type="checkbox" id="selectAll" form="bulkForm" onchange="toggleAll(this.checked)">
+      Pilih Semua
+    </label>
+    <button type="submit" id="bulkDeleteBtn" form="bulkForm" disabled class="btn btn-sm btn-danger">
+      Hapus Terpilih (<span id="selectedCount">0</span>)
+    </button>
+  </div>
 
-    <div class="scroll-x" style="padding: 0 24px 10px;">
-      <table class="table" style="min-width: 860px;">
+  <!-- CATATAN: form#bulkForm sengaja TIDAK membungkus tabel — kalau dibungkus,
+       form retry/delete per baris jadi NESTED (HTML melarangnya) dan browser
+       membuang sebagian form-nya. Semua kontrol bulk pakai atribut form="bulkForm". -->
+  <div class="scroll-x" style="padding: 0 24px 10px;">
+    <table class="table" style="min-width: 860px;">
         <thead>
           <tr>
             <th style="width: 36px;"></th>
@@ -83,7 +85,7 @@
         <tbody>
           {% for e in emails %}
           <tr>
-            <td><input type="checkbox" name="selected" value="{{ e.id }}" onchange="updateBulkBtn()"></td>
+            <td><input type="checkbox" name="selected" value="{{ e.id }}" form="bulkForm" onchange="updateBulkBtn()"></td>
             <td class="muted" style="white-space: nowrap; font-size: 0.8rem;">{{ e.created_at_fmt }}</td>
             <td class="truncate" title="{{ e.to_addr }}" style="max-width: 220px;">{{ e.to_addr }}</td>
             <td class="truncate" title="{{ e.company }}" style="max-width: 180px;">{{ e.company }}</td>
@@ -122,6 +124,8 @@
         </tbody>
       </table>
     </div>
+
+  <form id="bulkForm" method="post" action="/history/bulk-delete" class="hidden">
     <input type="hidden" name="ids" id="selectedIds">
   </form>
 
@@ -130,17 +134,16 @@
     <span class="muted" style="font-size: 0.8rem;">{{ total }} total &middot; Halaman {{ page }}/{{ total_pages }}</span>
     <div class="flex">
       {% if page > 1 %}
-      <a href="?page={{ page - 1 }}&search={{ search }}&status={{ status_filter }}&account={{ account_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-sm btn-ghost">Prev</a>
+      <a href="?page={{ page - 1 }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&account={{ account_filter | urlencode }}&date_from={{ date_from | urlencode }}&date_to={{ date_to | urlencode }}" class="btn btn-sm btn-ghost">Prev</a>
       {% endif %}
       {% if page < total_pages %}
-      <a href="?page={{ page + 1 }}&search={{ search }}&status={{ status_filter }}&account={{ account_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-sm btn-ghost">Next</a>
+      <a href="?page={{ page + 1 }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&account={{ account_filter | urlencode }}&date_from={{ date_from | urlencode }}&date_to={{ date_to | urlencode }}" class="btn btn-sm btn-ghost">Next</a>
       {% endif %}
     </div>
   </div>
   {% endif %}
 </div>
 
-{% block scripts %}
 <script>
 function toggleAll(checked) {
   document.querySelectorAll('input[name="selected"]').forEach(cb => cb.checked = checked);
@@ -164,5 +167,4 @@ document.getElementById('bulkForm').addEventListener('submit', function(e) {
   });
 });
 </script>
-{% endblock %}
 {% endblock %}

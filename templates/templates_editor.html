@@ -7,18 +7,29 @@
     <span style="font-weight: 700;">Variabel:</span>
     <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{company}</code>,
     <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{position}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{extra}</code>
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{extra}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{greeting}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{opening}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{closing}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_name}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_phone}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_email}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_linkedin}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_github}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{wa_link}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{linkedin_url}</code>,
+    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{github_url}</code>
   </div>
-  <div class="muted" style="font-size: 0.78rem; margin-top: 6px;">Bisa bikin beberapa template. Batch akan pakai template acak setiap kirim agar konten lebih bervariasi.</div>
+  <div class="muted" style="font-size: 0.78rem; margin-top: 6px;">Template yang disimpan otomatis muncul di dropdown "Desain Email" pada halaman Kirim &amp; Batch.</div>
 </div>
 
 {% for t in templates %}
 <div class="card" style="padding: 0;">
   <div class="flex between" style="padding: 18px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px;">
     <h2 style="font-family: var(--font-display); font-size: 1rem; font-weight: 600;">Template: <span class="mono" style="color: var(--primary);">{{ t.name }}</span></h2>
-    <button type="button" onclick="toggleTemplate('{{ t.name }}')" class="btn btn-sm btn-ghost">Sembunyikan</button>
+    <button type="button" onclick="toggleTemplate({{ loop.index }})" class="btn btn-sm btn-ghost">Sembunyikan</button>
   </div>
-  <div id="tpl-{{ t.name }}" style="padding: 24px;">
+  <div id="tpl-{{ loop.index }}" style="padding: 24px;">
     <form method="post" action="/templates-editor/save" style="display: flex; flex-direction: column; gap: 16px;">
       <input type="hidden" name="name" value="{{ t.name }}">
       <div>
@@ -32,7 +43,7 @@
       <div class="flex" style="gap: 10px;">
         <button type="submit" class="btn">Simpan</button>
         {% if templates|length > 1 %}
-        <button type="button" onclick="confirmDelete('{{ t.name }}')" class="btn btn-danger">Hapus</button>
+        <button type="button" onclick='confirmDelete({{ t.name | tojson }})' class="btn btn-danger">Hapus</button>
         {% endif %}
       </div>
     </form>
@@ -69,10 +80,9 @@
   <input type="hidden" name="name" id="deleteName">
 </form>
 
-{% block scripts %}
 <script>
-function toggleTemplate(name) {
-  const el = document.getElementById('tpl-' + name);
+function toggleTemplate(idx) {
+  const el = document.getElementById('tpl-' + idx);
   if (el) el.classList.toggle('hidden');
 }
 function confirmDelete(name) {
@@ -82,5 +92,4 @@ function confirmDelete(name) {
   }
 }
 </script>
-{% endblock %}
 {% endblock %}

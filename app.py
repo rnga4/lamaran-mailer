@@ -1,10 +1,16 @@
 import asyncio
 import csv
+import datetime
+import hashlib
+import hmac
 import io
 import json
 import os
 import random
+import re
+import secrets
 import smtplib
+import tempfile
 import threading
 import time
 import uuid
@@ -14,38 +20,42 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Query, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import database as db
 from email_service import (
+    EMAIL_DESIGNS,
     build_email,
+    build_variants,
     get_templates,
     is_valid_email,
     render_body,
     send_email,
-    set_template,
 )
 
 # ────────────────────────── Config ──────────────────────────
 
 CV_DIR = Path(os.environ.get("CV_DIR", "/app/cv"))
 RATE_LIMIT_PER_HOUR: int = int(os.environ.get("RATE_LIMIT_PER_HOUR", "999999"))
-GMAIL_DAILY_LIMIT: int = int(os.environ.get("GMAIL_DAILY_LIMIT", "100"))
+# Gmail free tier: 500 email/hari. Bisa di-override di .env (GMAIL_DAILY_LIMIT).
+GMAIL_DAILY_LIMIT: int = int(os.environ.get("GMAIL_DAILY_LIMIT", "500"))
 SEND_DELAY_MIN: int = int(os.environ.get("SEND_DELAY_MIN", "30"))
 SEND_DELAY_MAX: int = int(os.environ.get("SEND_DELAY_MAX", "90"))
 SPREAD_HOURS: int = int(os.environ.get("SPREAD_HOURS", "6"))
 MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", "/app/data/backups"))
+BACKUP_RETENTION_DAYS: int = int(os.environ.get("BACKUP_RETENTION_DAYS", "7"))
 
 CSV_CACHE_TTL = 3600
 
 _batch_csv_cache: dict[str, dict[str, Any]] = {}
-_batch_job_data: dict[int, dict[str, Any]] = {}
 _batch_wake = threading.Event()
 _smtp_index: int = 0
 _smtp_lock = threading.Lock()
+_send_lock = threading.Lock()
 
 
 @dataclass
@@ -57,6 +67,7 @@ class SmtpAccount:
     password: str
     from_addr: str
     from_name: str
+    use_ssl: bool = True
 
 
 def _parse_smtp_accounts() -> list[SmtpAccount]:
@@ -75,8 +86,16 @@ def _parse_smtp_accounts() -> list[SmtpAccount]:
             port = 465
         from_addr = os.environ.get(f"{prefix}FROM", user)
         from_name = os.environ.get(f"{prefix}FROM_NAME", "Nama Anda")
+        security = os.environ.get(f"{prefix}SECURITY", "").strip().lower()
+        if security == "starttls":
+            use_ssl = False
+        elif security == "ssl":
+            use_ssl = True
+        else:
+            # Default: SSL untuk port 465, STARTTLS untuk port lain (587, 25, ...)
+            use_ssl = port == 465
         key = f"{user}@{host}"
-        accounts.append(SmtpAccount(key, host, port, user, password, from_addr, from_name))
+        accounts.append(SmtpAccount(key, host, port, user, password, from_addr, from_name, use_ssl))
 
     add("SMTP_")  # backward compat: SMTP_HOST, SMTP_USER, etc.
     for i in range(1, 10):
@@ -107,44 +126,66 @@ def _try_send_with_failover(
     cv_path: str,
     template_name: str = "html",
 ) -> tuple[bool, str, str]:
+    if not SMTP_ACCOUNTS:
+        raise RuntimeError("No SMTP accounts configured")
+
     used_keys: set[str] = set()
-    while len(used_keys) < len(SMTP_ACCOUNTS):
-        acct = _next_smtp_account()
-        if acct.key in used_keys:
-            continue
-        used_keys.add(acct.key)
+    last_error = ""
+    # Kunci ini juga membuat cek rate limit + kirim + pakai kuota jadi atomik
+    # antar-thread (batch worker vs kirim tunggal via web UI).
+    with _send_lock:
+        while len(used_keys) < len(SMTP_ACCOUNTS):
+            acct = _next_smtp_account()
+            if acct.key in used_keys:
+                continue
+            used_keys.add(acct.key)
 
-        ok, _ = db.peek_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
-        if not ok:
-            continue
+            ok, _ = db.peek_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
+            if not ok:
+                continue
 
-        try:
-            msg, _, _ = build_email(
-                to_addr=to,
-                company=company,
-                position=position,
-                extra=extra,
-                from_addr=acct.from_addr,
-                from_name=acct.from_name,
-                cv_path=cv_path,
-                template_name=template_name,
+            # Batas aman harian per akun (GMAIL_DAILY_LIMIT) — ditegakkan
+            if GMAIL_DAILY_LIMIT > 0 and db.get_daily_sent_count(acct.key) >= GMAIL_DAILY_LIMIT:
+                continue
+
+            try:
+                msg, _, _ = build_email(
+                    to_addr=to,
+                    company=company,
+                    position=position,
+                    extra=extra,
+                    from_addr=acct.from_addr,
+                    from_name=acct.from_name,
+                    cv_path=cv_path,
+                    template_name=template_name,
+                )
+                send_email(msg, acct.host, acct.port, acct.user, acct.password, use_ssl=acct.use_ssl)
+                db.use_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
+                return True, acct.key, ""
+            except (smtplib.SMTPException, ConnectionError, TimeoutError) as e:
+                # Akun ini gagal — coba akun berikutnya
+                last_error = str(e)
+                continue
+            except (FileNotFoundError, ValueError, KeyError):
+                # CV hilang / error template — masalah nyata, jangan ditelan failover
+                raise
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                continue
+
+    # Semua akun sudah dicoba
+    if GMAIL_DAILY_LIMIT > 0:
+        all_daily_capped = all(
+            db.get_daily_sent_count(a.key) >= GMAIL_DAILY_LIMIT for a in SMTP_ACCOUNTS
+        )
+        if all_daily_capped:
+            err = (
+                f"Limit harian tercapai di semua akun ({GMAIL_DAILY_LIMIT}/hari). "
+                "Lanjut besok atau naikkan GMAIL_DAILY_LIMIT di .env."
             )
-            send_email(msg, acct.host, acct.port, acct.user, acct.password)
-            db.use_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
-            return True, acct.key, ""
-        except smtplib.SMTPException as e:
-            db.log_email(to, company, position, extra, Path(cv_path).name, "failed", str(e), acct.key)
-            continue
-        except (ConnectionError, TimeoutError) as e:
-            db.log_email(to, company, position, extra, Path(cv_path).name, "failed", str(e), acct.key)
-            continue
-        except FileNotFoundError:
-            raise
-        except Exception as e:
-            db.log_email(to, company, position, extra, Path(cv_path).name, "failed", str(e), acct.key)
-            continue
+            db.log_email(to, company, position, extra, Path(cv_path).name, "failed", err)
+            return False, "", err
 
-    # All accounts exhausted
     all_rate_limited = True
     min_remaining = RATE_LIMIT_PER_HOUR
     for acct in SMTP_ACCOUNTS:
@@ -154,8 +195,12 @@ def _try_send_with_failover(
         if info["remaining"] > 0:
             all_rate_limited = False
     if all_rate_limited:
-        return False, "", f"Semua akun kena rate limit, tunggu ~{min_remaining} detik"
-    return False, "", "Semua akun gagal mengirim (cek koneksi SMTP)"
+        err = f"Semua akun kena rate limit, tunggu ~{min_remaining} detik"
+    else:
+        err = last_error or "Semua akun gagal mengirim (cek koneksi SMTP)"
+    # Catat SATU baris gagal per penerima (bukan satu baris per akun yang dicoba)
+    db.log_email(to, company, position, extra, Path(cv_path).name, "failed", err)
+    return False, "", err
 
 
 @asynccontextmanager
@@ -164,6 +209,8 @@ async def lifespan(app: FastAPI):
     db.fail_stale_running_jobs()
     worker = threading.Thread(target=_batch_worker, daemon=True)
     worker.start()
+    backup = threading.Thread(target=_backup_worker, daemon=True)
+    backup.start()
     yield
 
 
@@ -171,6 +218,72 @@ app = FastAPI(title="Lamaran Mailer", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(CV_DIR)), name="static")
 app.mount("/assets", StaticFiles(directory="static"), name="assets")
 templates = Jinja2Templates(directory="templates")
+
+
+# ────────────────────────── Auth (opsional) ──────────────────────────
+
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+SESSION_COOKIE = "lm_session"
+_SESSION_SECRET = os.environ.get("APP_SECRET") or secrets.token_hex(32)
+
+
+def _session_token() -> str:
+    data = f"lm|{int(time.time())}"
+    sig = hmac.new(_SESSION_SECRET.encode(), data.encode(), hashlib.sha256).hexdigest()
+    return f"{data}.{sig}"
+
+
+def _valid_session(cookie: str | None) -> bool:
+    if not cookie or "." not in cookie:
+        return False
+    data, sig = cookie.rsplit(".", 1)
+    expected = hmac.new(_SESSION_SECRET.encode(), data.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Autentikasi hanya aktif kalau APP_PASSWORD diisi di .env
+    if not APP_PASSWORD:
+        return await call_next(request)
+    path = request.url.path
+    if path == "/login" or path == "/_health" or path.startswith("/assets"):
+        return await call_next(request)
+    if _valid_session(request.cookies.get(SESSION_COOKIE)):
+        return await call_next(request)
+    if request.method == "GET":
+        return RedirectResponse(url=f"/login?next={quote(path)}", status_code=303)
+    return Response(status_code=401)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, message: str = "", msg_type: str = "", next: str = ""):
+    return templates.TemplateResponse(
+        request, "login.html",
+        _ctx(request, message=message, msg_type=msg_type, next=next),
+    )
+
+
+@app.post("/login")
+def login(next: str = Form(""), password: str = Form(...)):
+    if not APP_PASSWORD:
+        return RedirectResponse(url="/", status_code=303)
+    if hmac.compare_digest(password, APP_PASSWORD):
+        target = next if (next.startswith("/") and not next.startswith("//")) else "/"
+        resp = RedirectResponse(url=target, status_code=303)
+        resp.set_cookie(
+            SESSION_COOKIE, _session_token(),
+            max_age=30 * 24 * 3600, httponly=True, samesite="lax",
+        )
+        return resp
+    return RedirectResponse(url="/login?message=Password+salah&msg_type=error", status_code=303)
+
+
+@app.post("/logout")
+def logout():
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
 
 
 # ────────────────────────── Helpers ──────────────────────────
@@ -206,6 +319,15 @@ def _get_cv_files_with_size() -> list[dict[str, str]]:
     return files
 
 
+def _email_designs() -> list[dict[str, str]]:
+    """Desain bawaan (EMAIL_DESIGNS) + template kustom dari DB, untuk dropdown."""
+    designs = [dict(d) for d in EMAIL_DESIGNS]
+    for t in db.get_all_templates():
+        if not any(d["id"] == t["name"] for d in designs):
+            designs.append({"id": t["name"], "name": t["name"], "desc": "Template kustom (editor)"})
+    return designs
+
+
 def _ctx(request: Request, **kw: Any) -> dict[str, Any]:
     all_limits = db.get_all_rate_limits(RATE_LIMIT_PER_HOUR)
     # Ensure all configured accounts appear even if not yet used
@@ -220,6 +342,14 @@ def _ctx(request: Request, **kw: Any) -> dict[str, Any]:
         "daily_sent": db.get_daily_sent_count(),
         "gmail_daily_limit": GMAIL_DAILY_LIMIT,
         "gmail_per_second": 5,
+        "auth_enabled": bool(APP_PASSWORD),
+        "email_designs": _email_designs(),
+        "work_hours": {
+            "enabled": db.get_setting("work_hours_enabled", "0") == "1",
+            "start": db.get_setting("work_start", "08:00") or "08:00",
+            "end": db.get_setting("work_end", "17:00") or "17:00",
+            "weekdays_only": db.get_setting("work_weekdays_only", "1") == "1",
+        },
     }
     base.update(kw)
     return base
@@ -227,6 +357,109 @@ def _ctx(request: Request, **kw: Any) -> dict[str, Any]:
 
 def _trim(val: str | None) -> str:
     return val.strip() if val else ""
+
+
+def _next_midnight() -> float:
+    """Detik epoch pergantian hari berikutnya (zona waktu lokal server)."""
+    now = datetime.datetime.now()
+    nxt = now + datetime.timedelta(days=1)
+    return datetime.datetime(nxt.year, nxt.month, nxt.day, 0, 0).timestamp()
+
+
+def _all_accounts_daily_capped() -> bool:
+    """Semua akun SMTP sudah mencapai batas harian (GMAIL_DAILY_LIMIT)."""
+    if GMAIL_DAILY_LIMIT <= 0 or not SMTP_ACCOUNTS:
+        return False
+    return all(db.get_daily_sent_count(a.key) >= GMAIL_DAILY_LIMIT for a in SMTP_ACCOUNTS)
+
+
+# ────────────────────────── Jam kerja pengiriman batch ──────────────────────────
+#
+# Pengaturan disimpan di tabel `settings` (bisa diubah dari UI halaman Batch):
+#   work_hours_enabled  = "1" / "0"   — aktif / nonaktif
+#   work_start          = "08:00"      — jam mulai (24 jam)
+#   work_end            = "17:00"      — jam selesai (24 jam)
+#   work_weekdays_only  = "1" / "0"   — hanya Senin–Jumat
+
+
+def _work_hours_enabled() -> bool:
+    return db.get_setting("work_hours_enabled", "0") == "1"
+
+
+def _work_hours_window() -> tuple[int, int]:
+    """(menit_mulai, menit_selesai) sejak 00:00 — default 08:00–17:00."""
+    def parse(v: Optional[str], default: int) -> int:
+        if v:
+            try:
+                h, m = v.strip().split(":")
+                return int(h) * 60 + int(m)
+            except (ValueError, AttributeError):
+                pass
+        return default
+    start = parse(db.get_setting("work_start"), 8 * 60)
+    end = parse(db.get_setting("work_end"), 17 * 60)
+    if end <= start:
+        end = start + 9 * 60  # pengaman: selesai harus setelah mulai
+    return start, end
+
+
+def _work_weekdays_only() -> bool:
+    return db.get_setting("work_weekdays_only", "1") == "1"
+
+
+def _is_work_time(dt: Optional[datetime.datetime] = None) -> bool:
+    """Apakah saat ini termasuk jam kerja (zona waktu lokal server)."""
+    if not _work_hours_enabled():
+        return True
+    dt = dt or datetime.datetime.now()
+    if _work_weekdays_only() and dt.weekday() >= 5:  # Sabtu & Minggu
+        return False
+    start, end = _work_hours_window()
+    minutes = dt.hour * 60 + dt.minute
+    return start <= minutes < end
+
+
+def _next_work_window() -> float:
+    """Epoch jam kerja berikutnya (dipakai saat sekarang di luar jam kerja)."""
+    now = datetime.datetime.now()
+    start, _ = _work_hours_window()
+    for delta in range(0, 9):
+        cand = now + datetime.timedelta(days=delta)
+        if _work_weekdays_only() and cand.weekday() >= 5:
+            continue
+        s = cand.replace(hour=start // 60, minute=start % 60, second=0, microsecond=0)
+        if s > now:
+            return s.timestamp()
+    return (now + datetime.timedelta(days=7)).timestamp()  # fallback aman
+
+
+def _work_hours_desc() -> str:
+    start, end = _work_hours_window()
+    days = "Senin–Jumat " if _work_weekdays_only() else ""
+    return f"{days}{start // 60:02d}:{start % 60:02d}–{end // 60:02d}:{end % 60:02d}"
+
+
+def _batch_blocked_reason() -> str:
+    """Alasan batch tidak boleh kirim sekarang ('' = boleh kirim)."""
+    capped = _all_accounts_daily_capped()
+    outside = not _is_work_time()
+    if capped and outside:
+        return "Kuota harian habis dan di luar jam kerja - batch dijeda otomatis, lanjut saat jam kerja berikutnya"
+    if capped:
+        return "Kuota harian habis - batch dijeda otomatis, lanjut besok"
+    if outside:
+        return f"Di luar jam kerja ({_work_hours_desc()}) - batch dijeda otomatis, lanjut saat jam kerja berikutnya"
+    return ""
+
+
+def _next_resume_ts() -> float:
+    """Kapan batch boleh lanjut — kombinasi kuota harian & jam kerja."""
+    candidates: list[float] = []
+    if _all_accounts_daily_capped():
+        candidates.append(_next_midnight())
+    if not _is_work_time():
+        candidates.append(_next_work_window())
+    return max(candidates) if candidates else 0.0
 
 
 def _clean_csv_cache() -> None:
@@ -295,20 +528,22 @@ def preview(
     company: str = Form(...),
     position: str = Form("IT Support / DevOps"),
     extra: str = Form(""),
-    cv_file: str = Form(...),
+    cv_file: str = Form(""),
+    template_name: str = Form("html"),
 ):
     to = _trim(to)
     company = _trim(company)
     position = _trim(position) or "IT Support / DevOps"
     extra = _trim(extra)
     cv_file = _trim(cv_file)
+    if not cv_file:
+        return RedirectResponse(url="/?message=Pilih+file+CV+untuk+preview&msg_type=error", status_code=303)
     try:
-        body = render_body(company, position, extra, "plain")
+        variants = build_variants(company, position)
+        body = render_body(company, position, extra, "plain", variants=variants)
+        html_body = render_body(company, position, extra, template_name, variants=variants)
     except (ValueError, KeyError) as e:
         body = f"Error: {e}"
-    try:
-        html_body = render_body(company, position, extra, "html")
-    except (ValueError, KeyError) as e:
         html_body = f"Error: {e}"
     return templates.TemplateResponse(
         request, "index.html",
@@ -323,6 +558,7 @@ def preview(
                 "position": position,
                 "extra": extra,
                 "cv_file": cv_file,
+                "template_name": template_name,
                 "body": body,
                 "html_body": html_body,
             },
@@ -336,7 +572,7 @@ def send_single(
     company: str = Form(...),
     position: str = Form("IT Support / DevOps"),
     extra: str = Form(""),
-    cv_file: str = Form(...),
+    cv_file: str = Form(""),
     template_name: str = Form("html"),
 ):
     to = _trim(to)
@@ -344,6 +580,9 @@ def send_single(
     position = _trim(position) or "IT Support / DevOps"
     extra = _trim(extra)
     cv_file = _trim(cv_file)
+
+    if not cv_file:
+        return RedirectResponse(url="/?message=Pilih+file+CV+dulu&msg_type=error", status_code=303)
 
     if db.check_duplicate_email(to, company):
         return RedirectResponse(
@@ -453,14 +692,32 @@ async def batch_preview_redirect():
     return RedirectResponse(url="/batch", status_code=302)
 
 
+@app.get("/batch/example-csv")
+def batch_example_csv():
+    content = (
+        "email,company\n"
+        "hrd@ptcontoh.co.id,PT Contoh Sejahtera\n"
+        "career@cvcontoh.com,CV Maju Jaya\n"
+    )
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=contoh_batch.csv"},
+    )
+
+
 @app.post("/batch/preview", response_class=HTMLResponse)
 async def batch_preview(
     request: Request,
     file: UploadFile = File(...),
-    cv_file: str = Form(...),
+    cv_file: str = Form(""),
     position: str = Form("IT Support / DevOps"),
     extra: str = Form(""),
+    template_name: str = Form("html"),
 ):
+    cv_file = _trim(cv_file)
+    if not cv_file:
+        return RedirectResponse(url="/batch?message=Pilih+file+CV+dulu&msg_type=error", status_code=303)
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:
         return RedirectResponse(
@@ -520,6 +777,7 @@ async def batch_preview(
         "cv_file": cv_file,
         "position": position,
         "extra": extra,
+        "template_name": template_name,
         "filename": file.filename or "",
         "created_at": time.time(),
     }
@@ -536,6 +794,9 @@ async def batch_preview(
             prev_sent_rows=prev_sent_rows,
             cache_key=cache_key,
             filename=file.filename,
+            position=position,
+            cv_file=cv_file,
+            template_name=template_name,
         ),
     )
 
@@ -543,6 +804,7 @@ async def batch_preview(
 @app.post("/batch/send")
 def batch_send(
     cache_key: str = Form(...),
+    scheduled_at: str = Form(""),
 ):
     data = _batch_csv_cache.pop(cache_key, None)
     if not data:
@@ -555,6 +817,7 @@ def batch_send(
     cv_file: str = data["cv_file"]
     position: str = data["position"]
     extra: str = data["extra"]
+    template_name: str = data.get("template_name", "html")
     filename: str = data.get("filename", "")
 
     try:
@@ -572,17 +835,40 @@ def batch_send(
             status_code=303,
         )
 
+    # Jadwal kirim: epoch (detik) dari datetime-local browser; 0 = langsung.
+    sched_epoch = 0
+    scheduled_at = _trim(scheduled_at)
+    if scheduled_at:
+        try:
+            sched_epoch = int(float(scheduled_at))
+        except ValueError:
+            sched_epoch = 0
+
     total = len(rows)
-    job_id = db.create_batch_job(total, filename=filename)
-    _batch_job_data[job_id] = {
+    # Simpan seluruh data batch di DB (payload) agar bisa dilanjutkan walau
+    # container restart — bukan hanya di memori.
+    payload = json.dumps({
         "rows": rows,
         "position": position,
         "extra": extra,
         "safe_cv": safe_cv,
         "cv_path": cv_path,
-    }
+        "template_name": template_name,
+    })
+    job_id = db.create_batch_job(total, filename=filename, scheduled_at=sched_epoch, payload=payload)
     _batch_wake.set()
 
+    if sched_epoch > 0:
+        return RedirectResponse(
+            url=f"/batch?job_id={job_id}&message=Batch+%23{job_id}+dibuat,+dijadwalkan+sesuai+waktu+yang+dipilih&msg_type=success",
+            status_code=303,
+        )
+    reason = _batch_blocked_reason()
+    if reason:
+        return RedirectResponse(
+            url=f"/batch?job_id={job_id}&message=Batch+%23{job_id}+dibuat+tetapi+{quote(reason)}&msg_type=warning",
+            status_code=303,
+        )
     return RedirectResponse(
         url=f"/batch?job_id={job_id}",
         status_code=303,
@@ -597,16 +883,54 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
     cv_path: str = data["cv_path"]
     total = len(rows)
 
-    results: dict[str, int] = {"success": 0, "failed": 0, "rate_limited": 0}
+    # Resume-aware: mulai dari counter yang tersimpan (jika batch pernah
+    # dijeda/dibatalkan lalu dilanjutkan) — email yang sudah diproses tidak
+    # akan dikirim ulang.
+    current = db.get_batch_job(job_id) or {}
+    results: dict[str, int] = {
+        "success": int(current.get("sent") or 0),
+        "failed": int(current.get("failed") or 0),
+        "rate_limited": int(current.get("rate_limited") or 0),
+    }
     last_error = ""
-    template_names = db.get_template_names()
+    processed = results["success"] + results["failed"] + results["rate_limited"]
+
+    if processed >= total:
+        db.update_batch_job(job_id, status="done",
+            sent=results["success"],
+            failed=results["failed"],
+            rate_limited=results["rate_limited"],
+            last_error="",
+        )
+        return
+
+    # Tutup celah race: pause/cancel bisa masuk antara cek worker dan update
+    # status 'running' di bawah — kalau status sudah berubah, jangan lanjut
+    # (kalau tidak, jeda bisa 'hilang' dan batch terus berjalan satu siklus).
+    current = db.get_batch_job(job_id)
+    if current and current["status"] in ("cancelled", "paused"):
+        db.update_batch_job(job_id,
+            sent=results["success"],
+            failed=results["failed"],
+            rate_limited=results["rate_limited"],
+            last_error=(
+                "Dibatalkan pengguna" if current["status"] == "cancelled"
+                else "Dijeda pengguna - klik Lanjutkan untuk meneruskan"
+            ),
+        )
+        return
+
     db.update_batch_job(job_id, status="running", last_error="")
+    tpl_name = data.get("template_name") or "html"
     try:
-        for row in rows:
-            # Cek cancel
+        for row in rows[processed:]:
+            # Cek cancel / pause
             current = db.get_batch_job(job_id)
-            if current and current["status"] == "cancelled":
-                last_error = "Dibatalkan pengguna"
+            if current and current["status"] in ("cancelled", "paused"):
+                last_error = (
+                    "Dibatalkan pengguna" if current["status"] == "cancelled"
+                    else "Dijeda pengguna - klik Lanjutkan untuk meneruskan"
+                )
                 db.update_batch_job(job_id,
                     sent=results["success"],
                     failed=results["failed"],
@@ -615,10 +939,22 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
                 )
                 break
 
+            # Kuota harian habis / di luar jam kerja di tengah jalan — jeda
+            # otomatis sampai waktunya tiba. Baris ini belum diproses; nanti
+            # dilanjutkan dari sini.
+            reason = _batch_blocked_reason()
+            if reason:
+                last_error = reason
+                db.pause_batch_job(job_id, resume_at=_next_resume_ts(), last_error=last_error)
+                db.update_batch_job(job_id,
+                    sent=results["success"],
+                    failed=results["failed"],
+                    rate_limited=results["rate_limited"],
+                )
+                break
+
             email_val = row["email"]
             company_val = row["company"]
-
-            tpl_name = random.choice(template_names) if template_names else "html"
 
             try:
                 success, key, err = _try_send_with_failover(email_val, company_val, position, extra, cv_path, template_name=tpl_name)
@@ -637,7 +973,7 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
                 db.log_email(email_val, company_val, position, extra, safe_cv, "sent", smtp_account=key)
                 results["success"] += 1
             else:
-                if "rate limit" in err.lower():
+                if "rate limit" in err.lower() or "limit harian" in err.lower():
                     results["rate_limited"] += 1
                 else:
                     results["failed"] += 1
@@ -657,12 +993,23 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
                 delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
             time.sleep(delay)
 
-        db.update_batch_job(job_id, status="done",
-            sent=results["success"],
-            failed=results["failed"],
-            rate_limited=results["rate_limited"],
-            last_error=last_error,
-        )
+        # Kalau berhenti karena cancel/pause, status sudah di-set oleh API —
+        # jangan ditimpa jadi 'done'.
+        final = db.get_batch_job(job_id)
+        if final and final["status"] in ("cancelled", "paused"):
+            db.update_batch_job(job_id,
+                sent=results["success"],
+                failed=results["failed"],
+                rate_limited=results["rate_limited"],
+                last_error=last_error,
+            )
+        else:
+            db.update_batch_job(job_id, status="done",
+                sent=results["success"],
+                failed=results["failed"],
+                rate_limited=results["rate_limited"],
+                last_error=last_error,
+            )
     except Exception as e:
         last_error = f"Kesalahan sistem: {e}"
         db.update_batch_job(job_id, status="failed",
@@ -673,38 +1020,105 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
         )
 
 
+def _load_batch_payload(job: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Baca data batch dari kolom payload DB (bertahan melewati restart)."""
+    raw = job.get("payload") or ""
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("rows"), list):
+        return None
+    return data
+
+
 def _batch_worker() -> None:
     while True:
+        # Auto-lanjutkan batch yang waktunya lanjut tiba (mis. jeda karena
+        # batas harian — lanjut otomatis hari berikutnya).
+        for job in db.get_auto_resumable_paused_jobs():
+            db.resume_batch_job(job["id"])
+
         queued = db.get_queued_batch_jobs()
         if not queued:
             _batch_wake.wait(timeout=5)
             _batch_wake.clear()
             continue
-        job_id = queued[0]["id"]
-        data = _batch_job_data.pop(job_id, None)
-        if data is None:
-            for _ in range(20):
-                time.sleep(0.05)
-                data = _batch_job_data.pop(job_id, None)
-                if data is not None:
-                    break
-        if data is None:
-            db.update_batch_job(job_id, status="failed", last_error="Data batch tidak ditemukan")
+
+        now = time.time()
+        ready = None
+        earliest_sched: Optional[float] = None
+        for job in queued:
+            sched = float(job.get("scheduled_at") or 0)
+            if sched > now:
+                if earliest_sched is None or sched < earliest_sched:
+                    earliest_sched = sched
+                continue
+            ready = job
+            break
+
+        if ready is None:
+            # Semua masih menunggu jadwal — tidur sebentar, cek lagi (juga
+            # agar jeda/batal tetap responsif). Batch non-jadwal tetap bisa
+            # jalan duluan kalau dibuat setelahnya.
+            if earliest_sched is not None:
+                _batch_wake.wait(timeout=min(earliest_sched - now, 5))
+            else:
+                _batch_wake.wait(timeout=5)
+            _batch_wake.clear()
             continue
+
+        job_id = ready["id"]
+
+        # Ada batasan (kuota harian habis / di luar jam kerja) — jangan mulai;
+        # jeda otomatis sampai waktunya tiba.
+        reason = _batch_blocked_reason()
+        if reason:
+            db.pause_batch_job(
+                job_id,
+                resume_at=_next_resume_ts(),
+                last_error=reason,
+            )
+            continue
+
+        # Payload hanya diambil untuk job yang siap — antrian lain cukup
+        # metadata (tanpa payload besar) selama menunggu jadwal.
+        ready_full = db.get_batch_job(job_id, with_payload=True)
+        data = _load_batch_payload(ready_full) if ready_full else None
+        if data is None:
+            db.update_batch_job(job_id, status="failed", last_error="Data batch tidak ditemukan (payload kosong)")
+            continue
+
         current = db.get_batch_job(job_id)
-        if current and current["status"] == "cancelled":
+        if current and current["status"] in ("cancelled", "paused"):
             continue
+
         _run_batch(job_id, data)
 
 
 @dataclass
-class CancelBody:
+class JobBody:
     job_id: int
 
 
 @app.post("/api/batch/cancel")
-def batch_cancel(body: CancelBody):
+def batch_cancel(body: JobBody):
     db.cancel_batch_job(body.job_id)
+    return {"ok": True}
+
+
+@app.post("/api/batch/pause")
+def batch_pause(body: JobBody):
+    db.pause_batch_job(body.job_id)
+    return {"ok": True}
+
+
+@app.post("/api/batch/resume")
+def batch_resume(body: JobBody):
+    db.resume_batch_job(body.job_id)
+    _batch_wake.set()
     return {"ok": True}
 
 
@@ -717,6 +1131,113 @@ def batch_cancel_form(job_id: int):
     )
 
 
+@app.post("/batch/pause/{job_id}")
+def batch_pause_form(job_id: int):
+    db.pause_batch_job(job_id)
+    return RedirectResponse(
+        url=f"/batch?message=Batch+%23{job_id}+dijeda,+klik+Lanjutkan+untuk+meneruskan&msg_type=warning",
+        status_code=303,
+    )
+
+
+@app.post("/batch/resume/{job_id}")
+def batch_resume_form(job_id: int):
+    db.resume_batch_job(job_id)
+    _batch_wake.set()
+    return RedirectResponse(
+        url=f"/batch?job_id={job_id}&message=Batch+%23{job_id}+dilanjutkan&msg_type=success",
+        status_code=303,
+    )
+
+
+@app.post("/api/batch/retry")
+def batch_retry(body: JobBody):
+    """Kirim ulang batch yang gagal/dibatalkan/selesai-ber-error (harus punya
+    payload tersimpan). Email yang sudah terkirim akan dilewati otomatis."""
+    job = db.get_batch_job(body.job_id, with_payload=True)
+    if not job or not job.get("payload"):
+        return {"ok": False, "error": "Data batch tidak tersedia untuk dikirim ulang (batch lama). Upload ulang CSV atau retry per-email dari History."}
+    if job["status"] in ("running", "queued", "paused"):
+        return {"ok": False, "error": f"Batch masih berstatus {job['status']} — tunggu atau jeda dulu."}
+    if not db.retry_batch_job(body.job_id):
+        return {"ok": False, "error": "Batch tidak lagi dalam status yang bisa dikirim ulang."}
+    _batch_wake.set()
+    return {"ok": True}
+
+
+@app.post("/batch/retry/{job_id}")
+def batch_retry_form(job_id: int):
+    job = db.get_batch_job(job_id, with_payload=True)
+    if not job or not job.get("payload"):
+        return RedirectResponse(
+            url="/batch?message=Data+batch+tidak+tersedia+untuk+dikirim+ulang+(batch+lama).+Upload+ulang+CSV+atau+retry+per-email+dari+History&msg_type=error",
+            status_code=303,
+        )
+    if job["status"] in ("running", "queued", "paused"):
+        return RedirectResponse(
+            url=f"/batch?message=Batch+%23{job_id}+masih+berjalan+({job['status']})&msg_type=warning",
+            status_code=303,
+        )
+    if not db.retry_batch_job(job_id):
+        return RedirectResponse(
+            url="/batch?message=Batch+tidak+lagi+dalam+status+yang+bisa+dikirim+ulang&msg_type=warning",
+            status_code=303,
+        )
+    _batch_wake.set()
+    return RedirectResponse(
+        url=f"/batch?job_id={job_id}&message=Batch+%23{job_id}+dijadwalkan+ulang,+email+yang+sudah+terkirim+akan+dilewati&msg_type=success",
+        status_code=303,
+    )
+
+
+# ────────────────────────── SETTINGS: JAM KERJA ──────────────────────────
+
+
+@app.post("/settings/work-hours")
+def save_work_hours(
+    enabled: str = Form("0"),
+    start: str = Form("08:00"),
+    end: str = Form("17:00"),
+    weekdays_only: str = Form("0"),
+):
+    """Simpan pengaturan jam kerja pengiriman batch (dari halaman /batch)."""
+    start = _trim(start)
+    end = _trim(end)
+    time_re = re.compile(r"^\d{1,2}:\d{2}$")
+    if not (time_re.match(start) and time_re.match(end)):
+        return RedirectResponse(
+            url="/batch?message=Format+jam+tidak+valid+(contoh:+08:00)&msg_type=error",
+            status_code=303,
+        )
+    sh, sm = (int(x) for x in start.split(":"))
+    eh, em = (int(x) for x in end.split(":"))
+    if not (0 <= sh <= 23 and 0 <= sm <= 59 and 0 <= eh <= 23 and 0 <= em <= 59):
+        return RedirectResponse(
+            url="/batch?message=Jam+di+luar+jangkauan+(00:00-23:59)&msg_type=error",
+            status_code=303,
+        )
+    if sh * 60 + sm >= eh * 60 + em:
+        return RedirectResponse(
+            url="/batch?message=Jam+selesai+harus+setelah+jam+mulai&msg_type=error",
+            status_code=303,
+        )
+    db.set_setting("work_hours_enabled", "1" if enabled == "on" else "0")
+    db.set_setting("work_start", start)
+    db.set_setting("work_end", end)
+    db.set_setting("work_weekdays_only", "1" if weekdays_only == "on" else "0")
+    # Kalau sekarang sudah boleh kirim, langsung lanjutkan batch yang dijeda
+    # karena jam kerja (yang dijeda karena kuota harian tetap menunggu batasnya).
+    if not _batch_blocked_reason():
+        for j in db.get_active_batch_jobs():
+            if j["status"] == "paused" and "jam kerja" in (j.get("last_error") or ""):
+                db.resume_batch_job(j["id"])
+    _batch_wake.set()
+    return RedirectResponse(
+        url="/batch?message=Pengaturan+jam+kerja+disimpan&msg_type=success",
+        status_code=303,
+    )
+
+
 # ────────────────────────── SSE Batch Progress ──────────────────────────
 
 
@@ -724,6 +1245,8 @@ def batch_cancel_form(job_id: int):
 async def batch_progress_stream(job_id: int):
     async def event_generator():
         while True:
+            if await request.is_disconnected():
+                break
             job = await asyncio.to_thread(db.get_batch_job, job_id)
             if not job:
                 yield f"event: error\ndata: {json.dumps({'error': 'not found'})}\n\n"
@@ -737,7 +1260,11 @@ async def batch_progress_stream(job_id: int):
 
             await asyncio.sleep(1)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/batch-progress/{job_id}")
@@ -846,9 +1373,70 @@ def history_export(
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request):
     stats = db.get_stats()
+    smtp_stats = db.get_smtp_account_stats()
     return templates.TemplateResponse(
         request, "dashboard.html",
-        _ctx(request, stats=stats),
+        _ctx(request, stats=stats, smtp_stats=smtp_stats),
+    )
+
+
+# ────────────────────────── BACKUP ──────────────────────────
+
+
+def _backup_worker() -> None:
+    """Backup otomatis harian + bersihkan backup yang lebih lama dari N hari."""
+    while True:
+        try:
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            marker = BACKUP_DIR / f"auto-{today}.db"
+            if not marker.exists():
+                db.create_backup(marker)
+            cutoff = time.time() - BACKUP_RETENTION_DAYS * 86400
+            for f in BACKUP_DIR.glob("auto-*.db"):
+                try:
+                    if f.stat().st_mtime < cutoff:
+                        f.unlink()
+                except OSError:
+                    pass
+        except Exception:
+            pass
+        time.sleep(6 * 3600)
+
+
+@app.get("/backup/download")
+def backup_download():
+    fd, tmp = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        db.create_backup(tmp)
+    except Exception as e:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return RedirectResponse(
+            url=f"/dashboard?message=Backup+gagal:+{quote(str(e))}&msg_type=error",
+            status_code=303,
+        )
+    fname = f"lamaran-mailer-backup-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+
+    def _iter():
+        try:
+            with open(tmp, "rb") as f:
+                chunk = f.read(65536)
+                while chunk:
+                    yield chunk
+                    chunk = f.read(65536)
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    return StreamingResponse(
+        _iter(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 
@@ -895,7 +1483,7 @@ def cv_delete(filename: str = Form(...)):
     except ValueError:
         return RedirectResponse(url="/cv?message=Nama+file+tidak+valid&msg_type=error", status_code=303)
     path = CV_DIR / safe_name
-    if path.exists() and path.parent == CV_DIR.resolve():
+    if path.exists() and path.parent.resolve() == CV_DIR.resolve():
         path.unlink()
     return RedirectResponse(url="/cv?message=CV+dihapus&msg_type=success", status_code=303)
 
@@ -935,9 +1523,23 @@ def save_template(
             url="/templates-editor?message=Semua+field+wajib+diisi&msg_type=error",
             status_code=303,
         )
+    if len(name) > 50 or not re.fullmatch(r"[a-zA-Z0-9 ._\-]+", name):
+        return RedirectResponse(
+            url="/templates-editor?message=Nama+template+hanya+boleh+huruf,+angka,+spasi,+titik,+strip+dan+underscore+(maks+50)&msg_type=error",
+            status_code=303,
+        )
+    # Template default memakai placeholder variant (greeting/opening/closing,
+    # sender_*, wa_link, linkedin_url) — sediakan nilai dummy agar validasi
+    # tidak menolak template yang memakainya.
+    _dummy_variants = {
+        "greeting": "Test", "opening": "Test", "closing": "Test",
+        "sender_name": "Test", "sender_phone": "Test", "sender_email": "Test",
+        "sender_linkedin": "Test", "sender_github": "Test",
+        "wa_link": "Test", "linkedin_url": "Test", "github_url": "Test",
+    }
     try:
-        body.format(company="Test", position="Test", extra="")
-        html_body.format(company="Test", position="Test", extra="")
+        body.format(company="Test", position="Test", extra="", **_dummy_variants)
+        html_body.format(company="Test", position="Test", extra="", **_dummy_variants)
     except (KeyError, ValueError, IndexError) as e:
         return RedirectResponse(
             url=f"/templates-editor?message=Error+di+template:+{quote(str(e))}&msg_type=error",

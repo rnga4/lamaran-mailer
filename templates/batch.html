@@ -14,8 +14,82 @@
       <span class="muted" style="font-size: 0.78rem;">{% if job.filename %}{{ job.filename }}{% endif %}</span>
     </div>
   </div>
-  <p class="muted" style="font-size: 0.88rem; margin: 12px 0 20px;">Batch ini akan mulai otomatis setelah batch sebelumnya selesai. Total <span class="mono" style="font-weight: 600;">{{ job.total }}</span> email.</p>
+  <p class="muted" style="font-size: 0.88rem; margin: 12px 0 20px;">
+    {% if job.scheduled_at %}
+    Dijadwalkan mulai <strong><span data-ts="{{ job.scheduled_at }}"></span></strong> — akan berjalan otomatis begitu waktunya tiba. Total <span class="mono" style="font-weight: 600;">{{ job.total }}</span> email.
+    {% else %}
+    Batch ini akan mulai otomatis setelah batch sebelumnya selesai. Total <span class="mono" style="font-weight: 600;">{{ job.total }}</span> email.
+    {% endif %}
+  </p>
   <div class="flex" style="justify-content: flex-end;">
+    <button id="cancelBtn" onclick="cancelBatch({{ job.id }})" class="btn btn-danger">Batalkan</button>
+  </div>
+</div>
+<script>
+  (function() {
+    const jobId = {{ job.id }};
+    const es = new EventSource('/api/batch-progress/' + jobId + '/stream');
+    es.onmessage = function(event) {
+      const job = JSON.parse(event.data);
+      if (!job || job.error) return;
+      if (job.status === 'running' || job.status === 'paused') { es.close(); window.location.reload(); }
+      if (job.status === 'done' || job.status === 'cancelled' || job.status === 'failed') {
+        es.close();
+        window.location.href = '/batch?job_id=' + jobId;
+      }
+    };
+    es.addEventListener('error', function() { es.close(); });
+  })();
+
+  function cancelBatch(jobId) {
+    if (!confirm('Yakin mau batalkan batch #' + jobId + '?')) return;
+    const btn = document.getElementById('cancelBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Membatalkan...'; }
+    fetch('/api/batch/cancel', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: jobId}),
+    }).then(function() {
+      if (btn) btn.textContent = 'Dibatalkan';
+    });
+  }
+</script>
+{% endif %}
+
+{% if job and job.status == 'paused' %}
+<div class="card">
+  <div class="flex between" style="flex-wrap: wrap; gap: 8px;">
+    <div>
+      <div class="card-title" style="margin-bottom: 4px;">Batch #{{ job.id }} Dijeda</div>
+      <span class="muted" style="font-size: 0.78rem;">{% if job.filename %}{{ job.filename }}{% endif %}</span>
+    </div>
+    <span class="chip wait">Dijeda</span>
+  </div>
+  <div class="grid3" style="text-align: center; margin: 16px 0 8px;">
+    <div>
+      <div class="stat-value ok" style="font-size: 1.5rem;">{{ job.sent }}</div>
+      <div class="card-label" style="margin-top: 6px;">Berhasil</div>
+    </div>
+    <div>
+      <div class="stat-value bad" style="font-size: 1.5rem;">{{ job.failed }}</div>
+      <div class="card-label" style="margin-top: 6px;">Gagal</div>
+    </div>
+    <div>
+      <div class="stat-value warn" style="font-size: 1.5rem;">{{ job.rate_limited }}</div>
+      <div class="card-label" style="margin-top: 6px;">Rate Limit</div>
+    </div>
+  </div>
+  {% set done = job.sent + job.failed + job.rate_limited %}
+  <div class="progress" style="height: 8px; margin: 8px 0 4px;"><div style="width: {{ (done / (job.total or 1) * 100) | int }}%"></div></div>
+  <p class="muted" style="font-size: 0.8rem;">{{ done }}/{{ job.total }} diproses — {{ job.total - done }} tersisa.</p>
+  {% if job.resume_at %}
+  <p class="muted" style="font-size: 0.82rem; margin-top: 6px;">Akan lanjut otomatis <strong><span data-ts="{{ job.resume_at }}"></span></strong> — atau klik <strong>Lanjutkan</strong> untuk langsung sekarang.</p>
+  {% endif %}
+  {% if job.last_error %}
+  <div class="notice warn" style="margin: 12px 0 0;">{{ job.last_error }}</div>
+  {% endif %}
+  <div class="flex" style="justify-content: flex-end; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);">
+    <button onclick="resumeBatch({{ job.id }})" class="btn">Lanjutkan</button>
     <button id="cancelBtn" onclick="cancelBatch({{ job.id }})" class="btn btn-danger">Batalkan</button>
   </div>
 </div>
@@ -34,17 +108,16 @@
     };
     es.addEventListener('error', function() { es.close(); });
   })();
-
   function cancelBatch(jobId) {
     if (!confirm('Yakin mau batalkan batch #' + jobId + '?')) return;
-    document.getElementById('cancelBtn').disabled = true;
-    document.getElementById('cancelBtn').textContent = 'Membatalkan...';
+    const btn = document.getElementById('cancelBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Membatalkan...'; }
     fetch('/api/batch/cancel', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({job_id: jobId}),
     }).then(function() {
-      document.getElementById('cancelBtn').textContent = 'Dibatalkan';
+      window.location.href = '/batch?message=Batch+%23' + jobId + '+dibatalkan&msg_type=warning';
     });
   }
 </script>
@@ -80,6 +153,7 @@
     </div>
   </div>
   <div class="flex" style="justify-content: flex-end; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);">
+    <button id="pauseBtn" onclick="pauseBatch({{ job.id }})" class="btn btn-ghost">Jeda</button>
     <button id="cancelBtn" onclick="cancelBatch({{ job.id }})" class="btn btn-danger">Batalkan</button>
   </div>
 </div>
@@ -104,6 +178,7 @@
       document.getElementById('statSent').textContent = job.sent;
       document.getElementById('statFailed').textContent = job.failed;
       document.getElementById('statRL').textContent = job.rate_limited;
+      if (job.status === 'paused') { es.close(); window.location.reload(); }
     };
     es.addEventListener('done', function(event) {
       const job = JSON.parse(event.data);
@@ -159,7 +234,10 @@
           <td class="mono">#{{ qj.id }}</td>
           <td>{% if qj.filename %}{{ qj.filename }}{% else %}CSV{% endif %}</td>
           <td class="mono">{{ qj.total }}</td>
-          <td><span class="chip wait"><span class="dot pulse"></span> Menunggu</span></td>
+          <td>
+            <span class="chip wait"><span class="dot pulse"></span> Menunggu</span>
+            {% if qj.scheduled_at %}<div class="muted" style="font-size: 0.7rem; margin-top: 4px;">Mulai <span data-ts="{{ qj.scheduled_at }}"></span></div>{% endif %}
+          </td>
           <td style="text-align: right;">
             <form method="post" action="/batch/cancel/{{ qj.id }}" style="display:inline">
               <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ qj.id }}?')" class="btn btn-sm btn-danger">Batalkan</button>
@@ -194,6 +272,45 @@
   {% if job.last_error %}
   <div class="notice danger" style="margin-top: 18px;">{{ job.last_error }}</div>
   {% endif %}
+  {% if job.has_payload and job.failed + job.rate_limited > 0 %}
+  <div class="flex" style="justify-content: flex-end; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);">
+    <form method="post" action="/batch/retry/{{ job.id }}" style="display:inline">
+      <button type="submit" onclick="return confirm('Kirim ulang {{ job.failed + job.rate_limited }} email yang belum berhasil pada batch #{{ job.id }}? Email yang sudah terkirim akan dilewati.')" class="btn">Kirim Ulang ({{ job.failed + job.rate_limited }})</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if job_id and job and job.status == 'failed' %}
+<div class="card">
+  <div class="card-title" style="margin-bottom: 12px;">Batch #{{ job.id }} Gagal</div>
+  <div class="grid3" style="text-align: center;">
+    <div>
+      <div class="stat-value ok" style="font-size: 1.5rem;">{{ job.sent }}</div>
+      <div class="card-label" style="margin-top: 6px;">Berhasil</div>
+    </div>
+    <div>
+      <div class="stat-value bad" style="font-size: 1.5rem;">{{ job.failed }}</div>
+      <div class="card-label" style="margin-top: 6px;">Gagal</div>
+    </div>
+    <div>
+      <div class="stat-value warn" style="font-size: 1.5rem;">{{ job.rate_limited }}</div>
+      <div class="card-label" style="margin-top: 6px;">Rate Limit</div>
+    </div>
+  </div>
+  {% if job.last_error %}
+  <div class="notice danger" style="margin-top: 16px;">{{ job.last_error }}</div>
+  {% endif %}
+  {% if job.has_payload %}
+  <div class="flex" style="justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+    <form method="post" action="/batch/retry/{{ job.id }}" style="display:inline">
+      <button type="submit" onclick="return confirm('Kirim ulang batch #{{ job.id }}? Email yang sudah berhasil akan dilewati.')" class="btn">Kirim Ulang</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="notice warn" style="margin-top: 16px;">Batch ini dibuat sebelum fitur penyimpanan data (payload), jadi daftar emailnya tidak tersimpan. Cara kirim ulang: <strong>upload ulang file CSV</strong> — email yang sudah terkirim akan otomatis dilewati — atau pakai tombol retry per-email di halaman <a href="/history">History</a>.</div>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -222,10 +339,18 @@
             <span class="chip run"><span class="dot pulse"></span> Berjalan</span>
             {% elif bj.status == 'done' %}
             <span class="chip {% if bj.failed == 0 and bj.rate_limited == 0 %}done{% else %}wait{% endif %}">{% if bj.failed == 0 and bj.rate_limited == 0 %}Selesai{% else %}Selesai (error){% endif %}</span>
+            {% if not bj.has_payload and bj.failed + bj.rate_limited > 0 %}<div class="muted" style="font-size: 0.68rem; margin-top: 3px;">Data lama — upload ulang CSV</div>{% endif %}
             {% elif bj.status == 'queued' %}
             <span class="chip wait"><span class="dot pulse"></span> Menunggu</span>
+            {% if bj.scheduled_at %}<div class="muted" style="font-size: 0.68rem; margin-top: 3px;">Jadwal <span data-ts="{{ bj.scheduled_at }}"></span></div>{% endif %}
+            {% elif bj.status == 'paused' %}
+            <span class="chip wait">Dijeda</span>
+            {% if bj.resume_at %}<div class="muted" style="font-size: 0.68rem; margin-top: 3px;">Auto lanjut <span data-ts="{{ bj.resume_at }}"></span></div>{% endif %}
             {% elif bj.status == 'cancelled' %}
             <span class="chip failed">Dibatalkan</span>
+            {% elif bj.status == 'failed' %}
+            <span class="chip failed">Gagal</span>
+            {% if not bj.has_payload %}<div class="muted" style="font-size: 0.68rem; margin-top: 3px;">Data lama — upload ulang CSV</div>{% endif %}
             {% endif %}
           </td>
           <td class="mono muted" style="font-size: 0.8rem;">
@@ -242,6 +367,19 @@
                 <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ bj.id }}?')" class="btn btn-sm btn-danger">Batalkan</button>
               </form>
               {% endif %}
+              {% if bj.status == 'paused' %}
+              <form method="post" action="/batch/resume/{{ bj.id }}" style="display:inline">
+                <button type="submit" class="btn btn-sm">Lanjutkan</button>
+              </form>
+              <form method="post" action="/batch/cancel/{{ bj.id }}" style="display:inline">
+                <button type="submit" onclick="return confirm('Yakin batalkan batch #{{ bj.id }}?')" class="btn btn-sm btn-danger">Batalkan</button>
+              </form>
+              {% endif %}
+              {% if bj.has_payload and (bj.status in ('failed', 'cancelled') or (bj.status == 'done' and bj.failed + bj.rate_limited > 0)) %}
+              <form method="post" action="/batch/retry/{{ bj.id }}" style="display:inline">
+                <button type="submit" onclick="return confirm('Kirim ulang batch #{{ bj.id }}? Email yang sudah berhasil akan dilewati.')" class="btn btn-sm btn-ghost">Kirim Ulang</button>
+              </form>
+              {% endif %}
               <a href="/batch?job_id={{ bj.id }}" class="btn btn-sm btn-ghost">Detail</a>
             </div>
           </td>
@@ -256,9 +394,51 @@
 <div class="card">
   <div class="flex between" style="flex-wrap: wrap; gap: 10px;">
     <div class="card-title" style="margin-bottom: 0;">Format CSV</div>
-    <a href="/static/template_lamaran.csv" download class="btn btn-sm btn-ghost">Download Template</a>
+    <a href="/batch/example-csv" download class="btn btn-sm btn-ghost">Download Contoh CSV</a>
   </div>
   <p class="muted" style="font-size: 0.88rem; margin-top: 14px;">Kolom: <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">email</code> dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">company</code> (atau <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">nama_pt</code>).</p>
+</div>
+
+<div class="card">
+  <div class="flex between" style="flex-wrap: wrap; gap: 10px;">
+    <div>
+      <div class="card-title" style="margin-bottom: 4px;">Jam Kerja Pengiriman</div>
+      <span class="muted" style="font-size: 0.8rem;">
+        {% if work_hours.enabled %}
+        Aktif — batch hanya berjalan {{ work_hours.start }}–{{ work_hours.end }}{% if work_hours.weekdays_only %}, Senin–Jumat{% endif %}
+        {% else %}
+        Nonaktif — batch berjalan kapan saja
+        {% endif %}
+      </span>
+    </div>
+    <span class="chip {% if work_hours.enabled %}done{% else %}wait{% endif %}">{% if work_hours.enabled %}Aktif{% else %}Nonaktif{% endif %}</span>
+  </div>
+  <form method="post" action="/settings/work-hours" style="margin-top: 16px;">
+    <div class="flex" style="gap: 22px; flex-wrap: wrap;">
+      <label class="field-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
+        <input type="checkbox" name="enabled" value="on" {% if work_hours.enabled %}checked{% endif %} style="width: 16px; height: 16px; accent-color: var(--primary);">
+        Aktifkan batas jam kerja
+      </label>
+      <label class="field-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
+        <input type="checkbox" name="weekdays_only" value="on" {% if work_hours.weekdays_only %}checked{% endif %} style="width: 16px; height: 16px; accent-color: var(--primary);">
+        Hanya Senin–Jumat (weekend dijeda)
+      </label>
+    </div>
+    <div class="flex" style="gap: 10px; margin-top: 14px; align-items: end; flex-wrap: wrap;">
+      <div>
+        <label class="field-label">Mulai</label>
+        <input type="time" name="start" value="{{ work_hours.start }}" class="field" style="width: 140px;">
+      </div>
+      <div>
+        <label class="field-label">Selesai</label>
+        <input type="time" name="end" value="{{ work_hours.end }}" class="field" style="width: 140px;">
+      </div>
+      <button type="submit" class="btn">Simpan</button>
+    </div>
+    <p class="muted" style="font-size: 0.75rem; margin-top: 10px;">
+      Di luar jam kerja, batch yang sedang berjalan atau baru dibuat <strong>dijeda otomatis</strong> dan lanjut begitu jam kerja berikutnya tiba (juga berlaku saat kuota harian habis). Kirim manual dari halaman <a href="/">Kirim</a> tidak terpengaruh.
+    </p>
+  </form>
 </div>
 
 {% if preview_mode %}
@@ -267,7 +447,8 @@
 
   <div class="grid3" style="font-size: 0.85rem; margin-bottom: 16px;">
     <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
-      <span class="muted">Posisi:</span> <span style="font-weight: 600;">{{ position }}</span>
+      <span class="muted">Posisi:</span> <span style="font-weight: 600;">{{ position }}</span><br>
+      <span class="muted">Desain:</span> <span style="font-weight: 600;">{% set found = email_designs | selectattr('id', 'equalto', template_name) | first %}{{ found.name if found else template_name }}</span>
     </div>
     <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px;">
       <span class="muted">CV:</span> <span style="font-weight: 600;">{{ cv_file }}</span>
@@ -282,6 +463,10 @@
           <span class="mono muted">{{ rl.remaining }}/{{ rl.max }} {% if rl.remaining < rl.max %}(reset {{ rl.resets_in // 60 }}m){% else %}tersedia{% endif %}</span>
         </div>
         {% endfor %}
+        <div class="flex between" style="gap: 8px; font-size: 0.78rem; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px;">
+          <span class="truncate">Harian ({{ gmail_daily_limit }})</span>
+          <span class="mono muted">{% set sisa_harian = [0, gmail_daily_limit - daily_sent] | max %}{{ sisa_harian }}/{{ gmail_daily_limit }} tersisa{% if sisa_harian == 0 %} — lanjut besok{% endif %}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -344,8 +529,15 @@
     </table>
   </div>
 
-  <form method="post" action="/batch/send" data-loading data-confirm="Kirim {{ rows|length }} email lamaran sekarang?">
+  <form method="post" action="/batch/send" data-loading data-confirm="Kirim {{ rows|length }} email lamaran sekarang?" id="sendForm">
     <input type="hidden" name="cache_key" value="{{ cache_key }}">
+    <input type="hidden" name="template_name" value="{{ template_name }}">
+    <input type="hidden" name="scheduled_at" id="scheduledEpoch" value="">
+    <div>
+      <label class="field-label">Mulai Kirim <span class="opt">(opsional — kosong = langsung)</span></label>
+      <input type="datetime-local" id="scheduledAt" class="field">
+      <p class="muted" style="font-size: 0.72rem; margin-top: 4px;">Kalau diisi, email disebar mulai jam tersebut (mengikuti zona waktu browser Anda).</p>
+    </div>
     <div class="flex" style="gap: 12px; flex-wrap: wrap;">
       <button type="submit" class="btn" style="flex: 1; min-width: 220px;">Kirim Semua ({{ rows|length }})</button>
       <a href="/batch?position={{ position|urlencode }}&extra={{ extra|urlencode }}" class="btn btn-ghost" style="flex: 1; min-width: 220px;">Kembali</a>
@@ -384,6 +576,14 @@
         <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
         {% endif %}
       </div>
+    </div>
+    <div>
+      <label class="field-label">Desain Email</label>
+      <select name="template_name" class="field">
+        {% for d in email_designs %}
+        <option value="{{ d.id }}" {% if request.query_params.get('template_name') == d.id or (not request.query_params.get('template_name') and d.id == 'html') %}selected{% endif %}>{{ d.name }}{% if d.desc %} — {{ d.desc }}{% endif %}</option>
+        {% endfor %}
+      </select>
     </div>
     <div>
       <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
@@ -430,5 +630,40 @@
       }
     });
   }
+
+  // ── Jadwal kirim: datetime-local → epoch (zona waktu lokal browser) ──
+  const sendForm = document.getElementById('sendForm');
+  if (sendForm) {
+    sendForm.addEventListener('submit', function() {
+      const dt = document.getElementById('scheduledAt');
+      const hidden = document.getElementById('scheduledEpoch');
+      hidden.value = dt && dt.value ? String(Math.floor(new Date(dt.value).getTime() / 1000)) : '';
+    });
+  }
+
+  // ── Pause / Resume batch ──
+  function pauseBatch(jobId) {
+    if (!confirm('Jeda batch #' + jobId + '? Anda bisa melanjutkannya kapan saja.')) return;
+    fetch('/api/batch/pause', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: jobId}),
+    }).then(function(res) { if (res.ok) window.location.reload(); });
+  }
+  function resumeBatch(jobId) {
+    fetch('/api/batch/resume', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: jobId}),
+    }).then(function(res) { if (res.ok) window.location.reload(); });
+  }
+
+  // ── Format jam jadwal (data-ts: epoch → waktu lokal browser) ──
+  document.querySelectorAll('[data-ts]').forEach(function(el) {
+    const ts = parseFloat(el.getAttribute('data-ts'));
+    if (ts && ts > 0) {
+      el.textContent = new Date(ts * 1000).toLocaleString([], {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'});
+    }
+  });
 </script>
 {% endblock %}

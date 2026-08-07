@@ -426,7 +426,7 @@ def _build_default_variants(company: str, position: str) -> dict[str, str]:
     sender_github = os.environ.get("SENDER_GITHUB", "github.com/username")
     phone_digits = re.sub(r"\D", "", sender_phone)
     # Nomor lokal Indonesia (0xxx) → format internasional (62xxx) agar link
-    # wa.me benar: 08XXXXXXXXXX → https://wa.me/6282217739814
+    # wa.me benar, mis. 0822… → https://wa.me/6282…
     if phone_digits.startswith("0"):
         phone_digits = "62" + phone_digits[1:]
     wa_link = f"https://wa.me/{phone_digits}" if phone_digits else "#"

@@ -161,9 +161,9 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 
 ### Status saat ini
 - Container **berjalan** di `http://localhost:8086` (sudah rebuild dengan semua perubahan di bawah)
-- `SMTP_` 1 akun Gmail (`YOUR_EMAIL@gmail.com`, App Password, FROM_NAME = Nama Anda)
-- Kontak terpasang: WA `08XXXXXXXXXX` → `wa.me/6282217739814`, LinkedIn `linkedin.com/in/username`, GitHub `rng4a`
-- CV: `CV_ID.pdf` di folder `cv/`
+- `SMTP_` 1 akun Gmail pribadi (App Password, FROM_NAME = nama asli)
+- Kontak terpasang di `.env` (nilai asli TIDAK disimpan di repo — lihat `.env`): WA otomatis format internasional, LinkedIn, GitHub
+- CV: file PDF di folder `cv/` (di-gitignore, tidak ikut ke repo)
 - **Jam kerja OFF** (default) — pengaturan tersimpan di DB, `08:00–17:00`, Senin–Jumat
 - Tema default: Dark (Light = `''` di localStorage)
 - Git: banyak file berubah **belum di-commit** (app.py, email_service.py, database.py, templates/*, dll + `templates/login.html` baru)

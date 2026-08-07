@@ -80,13 +80,6 @@
   .tcard-company { font-size: 0.8rem; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tcard-position { font-size: 0.68rem; color: var(--muted-foreground); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tcard-meta { font-size: 0.6rem; color: var(--muted-foreground); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
-  .tcard-date { font-size: 0.58rem; color: var(--muted-foreground); }
-  .tcard-stage {
-    font-size: 0.6rem; padding: 2px 4px; border-radius: 5px;
-    border: 1px solid var(--border); background: var(--card); color: var(--foreground);
-    max-width: 92px; cursor: pointer;
-  }
 
   /* ── Funnel compact: 1 bar distribusi + angka inline ── */
   .funnel { margin: 12px 0 16px; }
@@ -105,7 +98,7 @@
     <div class="section-title" style="font-size: 1.15rem;">Tracker Lamaran</div>
     <span class="chip done" style="font-size: 0.66rem;">{{ total_apps }} lamaran</span>
   </div>
-  <span class="muted" style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Geser kartu antar kolom / pakai dropdown di kartu untuk ubah tahap">Geser kartu antar kolom / pakai dropdown di kartu untuk ubah tahap</span>
+  <span class="muted" style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Geser kartu antar kolom untuk mengubah tahap">Geser kartu antar kolom untuk mengubah tahap</span>
 </div>
 
 {% if not applications %}
@@ -175,13 +168,6 @@
         <div class="tcard-company">{{ a.company }}</div>
         <div class="tcard-position">{{ a.position }}</div>
         <div class="tcard-meta">{{ a.to_addr }} · {{ a.created_at_fmt }}</div>
-        <div class="tcard-foot">
-          <select class="tcard-stage" onchange="moveViaSelect(this, {{ a.id }})" title="Ubah tahap">
-            {% for skey in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
-            <option value="{{ skey }}" {% if skey == a.stage %}selected{% endif %}>{{ stage_labels[skey] }}</option>
-            {% endfor %}
-          </select>
-        </div>
       </div>
       {% endfor %}
     </div>
@@ -264,10 +250,6 @@
       }
     })
     .catch(function() { alert('Gagal terhubung ke server'); });
-  }
-
-  function moveViaSelect(sel, emailId) {
-    moveCard(emailId, sel.value);
   }
 
   function refreshCounts() {

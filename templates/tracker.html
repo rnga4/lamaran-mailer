@@ -1,39 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Lamaran — Lamaran Mailer{% endblock %}
-{% block content_wrapper %}<div class="page page-tracker">{% endblock %}
 {% block content %}
 
 <style>
-  /* Layout halaman mengisi viewport: board otomatis memakan sisa ruang
-     setelah header + funnel, jadi halaman tidak scroll vertikal —
-     konten yang banyak scroll di dalam kolom.
-     DIBERI PREFIX .page-tracker / :has() supaya tidak bocor ke halaman lain. */
-  body:has(.page-tracker) .content { padding-bottom: 24px; }
-  .page-tracker { height: calc(100vh - 58px); min-height: 0; }
   .tracker-board {
-    flex: 1 1 auto;
-    min-height: 140px;
     display: grid;
     grid-template-columns: repeat(5, minmax(180px, 1fr));
     gap: 10px;
     overflow-x: auto;
     padding: 2px 2px 10px;
+    align-items: start;
   }
   .tcol {
-    display: flex; flex-direction: column;
-    height: 100%;
-    min-height: 0;
     background: var(--muted);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 8px;
+    min-height: 120px;
     transition: background 0.15s, border-color 0.15s;
   }
   .tcol.drag-over {
     background: color-mix(in oklch, var(--primary) 8%, transparent);
     border-color: var(--primary);
   }
-  .tcol-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 0 2px; flex-shrink: 0; }
+  .tcol-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; padding: 0 2px; }
   .tcol-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .tcol-title { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
   .tcol-count {
@@ -41,48 +31,7 @@
     background: var(--card); border: 1px solid var(--border);
     border-radius: 99px; padding: 0 7px; color: var(--muted-foreground);
   }
-  .tcol-body {
-    display: flex; flex-direction: column; gap: 6px;
-    overflow-y: auto;
-    min-height: 40px;
-    padding-right: 2px;
-  }
-  .tcol-body::-webkit-scrollbar { width: 6px; }
-  .tcol-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-  .tcol-body::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
-  .tcard.filtered-out { display: none; }
-
-  /* Search global (semua kolom) */
-  .tracker-search {
-    width: 100%; box-sizing: border-box;
-    font-size: 0.78rem; padding: 8px 12px; margin: 8px 0 0;
-    border: 1px solid var(--border); border-radius: 8px;
-    background: var(--card); color: var(--foreground);
-    outline: none; transition: border-color 0.15s;
-  }
-  .tracker-search:focus { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in oklch, var(--primary) 18%, transparent); }
-  .tracker-empty { display: none; margin: 10px 0 0; }
-  .tracker-empty.show { display: block; }
-
-  /* Menu ubah tahap (fallback sentuh / tap) */
-  .stage-menu {
-    display: none; position: fixed; z-index: 120; min-width: 172px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-    padding: 6px;
-  }
-  .stage-menu.show { display: block; }
-  .stage-menu-title {
-    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--muted-foreground); padding: 4px 8px 6px;
-  }
-  .stage-menu-item {
-    display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px;
-    border: none; background: transparent; color: var(--foreground);
-    font-size: 0.8rem; border-radius: 6px; cursor: pointer; text-align: left;
-  }
-  .stage-menu-item:hover { background: var(--muted); }
-  .stage-menu-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .tcol-body { display: flex; flex-direction: column; gap: 6px; min-height: 40px; }
   .tcard {
     background: var(--card);
     border: 1px solid var(--border);
@@ -100,6 +49,13 @@
   .tcard-company { font-size: 0.8rem; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tcard-position { font-size: 0.68rem; color: var(--muted-foreground); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tcard-meta { font-size: 0.6rem; color: var(--muted-foreground); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+  .tcard-date { font-size: 0.58rem; color: var(--muted-foreground); }
+  .tcard-stage {
+    font-size: 0.6rem; padding: 2px 4px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+    max-width: 92px; cursor: pointer;
+  }
 
   /* ── Funnel compact: 1 bar distribusi + angka inline ── */
   .funnel { margin: 12px 0 16px; }
@@ -110,19 +66,20 @@
   .fstat b { color: var(--foreground); font-weight: 700; }
   .fstat .dot { width: 6px; height: 6px; border-radius: 50%; }
 
+  .board-empty {
+    text-align: center; padding: 40px 20px;
+    color: var(--muted-foreground); font-size: 0.88rem;
+  }
   @media (max-width: 1180px) { .tracker-board { grid-template-columns: repeat(5, 220px); } }
 </style>
 
-<div class="flex between" style="flex-wrap: nowrap; gap: 10px;">
-  <div class="flex" style="gap: 12px; flex-shrink: 0;">
+<div class="flex between" style="flex-wrap: wrap; gap: 8px;">
+  <div class="flex" style="gap: 12px;">
     <div class="section-title" style="font-size: 1.15rem;">Tracker Lamaran</div>
     <span class="chip done" style="font-size: 0.66rem;">{{ total_apps }} lamaran</span>
   </div>
-  <span class="muted" style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Geser (desktop) / ketuk (HP) kartu untuk mengubah tahap">Geser / ketuk kartu untuk ubah tahap</span>
+  <span class="muted" style="font-size: 0.72rem;">Geser kartu antar kolom / pakai dropdown di kartu untuk ubah tahap</span>
 </div>
-
-<input type="text" class="tracker-search" id="globalSearch" placeholder="Cari di semua kolom — perusahaan, posisi, atau email…" oninput="onGlobalSearch(this)">
-<div class="notice info tracker-empty" id="globalEmpty"></div>
 
 {% if not applications %}
 <div class="card">
@@ -172,16 +129,6 @@
 <div class="notice info" style="margin-bottom: 14px; padding: 9px 14px; font-size: 0.78rem;">Papan menampilkan <strong>{{ applications|length }} lamaran terbaru</strong> dari {{ total_apps }}. Statistik di atas tetap menghitung semua.</div>
 {% endif %}
 
-<!-- Menu ubah tahap: muncul saat kartu diketuk (fallback layar sentuh) -->
-<div id="stageMenu" class="stage-menu">
-  <div class="stage-menu-title">Ubah tahap</div>
-  {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
-  <button type="button" class="stage-menu-item" onclick="chooseStage('{{ key }}')">
-    <span class="dot" style="background: {{ stage_colors[key] }};"></span>{{ stage_labels[key] }}
-  </button>
-  {% endfor %}
-</div>
-
 <div class="tracker-board" id="trackerBoard">
   {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
   <div class="tcol" data-stage="{{ key }}" ondragover="onDragOver(event)" ondrop="onDrop(event)">
@@ -193,15 +140,22 @@
     <div class="tcol-body" id="col-{{ key }}">
       {% for a in applications if a.stage == key %}
       <div class="tcard" draggable="true" data-id="{{ a.id }}" data-stage="{{ key }}"
-           data-search="{{ a.company|lower }} {{ a.position|lower }} {{ a.to_addr|lower }}"
            style="--tcard-accent: {{ stage_colors[key] }};"
            title="{{ a.company }} — {{ a.position }} · {{ a.to_addr }}"
            ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">
         <div class="tcard-company">{{ a.company }}</div>
         <div class="tcard-position">{{ a.position }}</div>
         <div class="tcard-meta">{{ a.to_addr }} · {{ a.created_at_fmt }}</div>
+        <div class="tcard-foot">
+          <select class="tcard-stage" onchange="moveViaSelect(this, {{ a.id }})" title="Ubah tahap">
+            {% for skey in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
+            <option value="{{ skey }}" {% if skey == a.stage %}selected{% endif %}>{{ stage_labels[skey] }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
       {% endfor %}
+    </div>
   </div>
   {% endfor %}
 </div>
@@ -262,16 +216,10 @@
         const card = document.querySelector('.tcard[data-id="' + emailId + '"]');
         if (card) {
           card.dataset.stage = stage;
+          const sel = card.querySelector('.tcard-stage');
+          if (sel) sel.value = stage;
           const dest = document.getElementById('col-' + stage);
           if (dest) dest.appendChild(card);
-          // Terapkan ulang filter global biar kartu yang baru masuk ikut
-          // ter-filter dengan benar (kalau globalSearch sedang aktif).
-          if (globalQuery) {
-            document.querySelectorAll('.tcard').forEach(function(c) {
-              const s = c.dataset.search || '';
-              c.classList.toggle('filtered-out', s.indexOf(globalQuery) === -1);
-            });
-          }
           refreshCounts();
           if (res.stage_stats) updateFunnel(res.stage_stats);
           card.classList.add('tcard-flash');
@@ -284,6 +232,10 @@
     .catch(function() { alert('Gagal terhubung ke server'); });
   }
 
+  function moveViaSelect(sel, emailId) {
+    moveCard(emailId, sel.value);
+  }
+
   function refreshCounts() {
     ['applied', 'follow_up', 'interview', 'offer', 'rejected'].forEach(function(stage) {
       const col = document.getElementById('col-' + stage);
@@ -292,54 +244,6 @@
       if (cnt) cnt.textContent = n;
     });
   }
-
-  // ── Filter global (semua kolom sekaligus) ──
-  let globalQuery = '';
-  function onGlobalSearch(input) {
-    globalQuery = input.value.trim().toLowerCase();
-    let totalVisible = 0;
-    document.querySelectorAll('.tcard').forEach(function(card) {
-      const s = card.dataset.search || '';
-      const hit = !globalQuery || s.indexOf(globalQuery) !== -1;
-      card.classList.toggle('filtered-out', !hit);
-      if (hit) totalVisible++;
-    });
-    const empty = document.getElementById('globalEmpty');
-    if (empty) {
-      empty.classList.toggle('show', globalQuery !== '' && totalVisible === 0);
-      if (globalQuery !== '' && totalVisible === 0) {
-        empty.textContent = 'Tidak ada lamaran yang cocok dengan \u201C' + input.value.trim() + '\u201D.';
-      }
-    }
-  }
-
-  // ── Fallback layar sentuh: ketuk kartu → menu ubah tahap ──
-  const isTouch = window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
-  if (isTouch) {
-    document.querySelectorAll('.tcard').forEach(function(card) {
-      card.addEventListener('click', function(e) { openStageMenu(e, card); });
-    });
-  }
-  function openStageMenu(e, card) {
-    e.preventDefault(); e.stopPropagation();
-    const menu = document.getElementById('stageMenu');
-    menu.dataset.emailId = card.dataset.id;
-    menu.style.top = Math.min(e.clientY - 8, window.innerHeight - 210) + 'px';
-    menu.style.left = Math.min(e.clientX - 8, window.innerWidth - 185) + 'px';
-    menu.classList.add('show');
-  }
-  function chooseStage(stage) {
-    const menu = document.getElementById('stageMenu');
-    const id = menu.dataset.emailId;
-    menu.classList.remove('show');
-    if (id) moveCard(parseInt(id, 10), stage);
-  }
-  document.addEventListener('click', function(e) {
-    const menu = document.getElementById('stageMenu');
-    if (menu && menu.classList.contains('show') && !menu.contains(e.target) && !e.target.closest('.tcard')) {
-      menu.classList.remove('show');
-    }
-  });
 
   // Funnel selalu dari server (menghitung SEMUA lamaran, bukan hanya 400 di board)
   function updateFunnel(stageStats) {

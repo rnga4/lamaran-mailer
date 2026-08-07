@@ -32,6 +32,8 @@ def init_db() -> None:
             extra TEXT,
             cv_file TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'sent',
+            stage TEXT NOT NULL DEFAULT 'applied',
+            stage_updated_at REAL,
             error TEXT,
             smtp_account TEXT DEFAULT '',
             created_at REAL NOT NULL
@@ -84,10 +86,14 @@ def init_db() -> None:
 
 
 def _migrate_db(conn: sqlite3.Connection) -> None:
-    # Add smtp_account column if it doesn't exist (legacy DBs)
+    # Add smtp_account / stage columns if missing (legacy DBs)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(emails)").fetchall()]
     if "smtp_account" not in cols:
         conn.execute("ALTER TABLE emails ADD COLUMN smtp_account TEXT DEFAULT ''")
+    if "stage" not in cols:
+        conn.execute("ALTER TABLE emails ADD COLUMN stage TEXT NOT NULL DEFAULT 'applied'")
+    if "stage_updated_at" not in cols:
+        conn.execute("ALTER TABLE emails ADD COLUMN stage_updated_at REAL")
 
     # Add filename/scheduled_at/payload columns to batch_jobs if missing (legacy DBs)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(batch_jobs)").fetchall()]
@@ -156,8 +162,8 @@ def log_email(
     _ensure_db()
     conn = _conn()
     conn.execute(
-        "INSERT INTO emails (to_addr, company, position, extra, cv_file, status, error, smtp_account, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (to_addr, company, position, extra, cv_file, status, error, smtp_account, time.time()),
+        "INSERT INTO emails (to_addr, company, position, extra, cv_file, status, error, smtp_account, stage, stage_updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'applied', ?, ?)",
+        (to_addr, company, position, extra, cv_file, status, error, smtp_account, time.time(), time.time()),
     )
     conn.commit()
     conn.close()
@@ -319,11 +325,12 @@ def export_emails_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "waktu", "email", "perusahaan", "posisi", "cv", "status", "error", "akun"])
+    writer.writerow(["id", "waktu", "email", "perusahaan", "posisi", "cv", "status", "tahap", "error", "akun"])
     for e in rows:
         writer.writerow([
             e["id"], e["created_at_fmt"], e["to_addr"], e["company"],
             e["position"], e["cv_file"], e["status"],
+            e.get("stage") or "",
             e["error"] or "",
             e["smtp_account"] or "",
         ])
@@ -347,6 +354,55 @@ def check_duplicate_email(to_addr: str, company: str) -> bool:
     ).fetchone()
     conn.close()
     return row is not None
+
+
+# ────────────────────────── Tracker lamaran (pipeline) ──────────────────────────
+
+VALID_STAGES = ["applied", "follow_up", "interview", "offer", "rejected"]
+
+
+def get_applications(limit: int = 400) -> list[dict[str, Any]]:
+    """Lamaran terkirim (status='sent'), terbaru dulu. Dibatasi 400 agar board
+    tidak berat saat jumlah lamaran ribuan (funnel tetap hitung semua)."""
+    _ensure_db()
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT *, datetime(created_at, 'unixepoch', 'localtime') as created_at_fmt "
+        "FROM emails WHERE status='sent' ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_email_stage(email_id: int, stage: str) -> bool:
+    """Ubah tahap lamaran (hanya untuk email yang statusnya 'sent')."""
+    if stage not in VALID_STAGES:
+        return False
+    _ensure_db()
+    conn = _conn()
+    cur = conn.execute(
+        "UPDATE emails SET stage=?, stage_updated_at=? WHERE id=? AND status='sent'",
+        (stage, time.time(), email_id),
+    )
+    conn.commit()
+    conn.close()
+    return cur.rowcount > 0
+
+
+def get_stage_stats() -> dict[str, int]:
+    """Jumlah lamaran per tahap (funnel)."""
+    _ensure_db()
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT stage, COUNT(*) as c FROM emails WHERE status='sent' GROUP BY stage"
+    ).fetchall()
+    conn.close()
+    result = {s: 0 for s in VALID_STAGES}
+    for r in rows:
+        if r["stage"] in result:
+            result[r["stage"]] = r["c"]
+    return result
 
 
 def get_stats() -> dict[str, Any]:

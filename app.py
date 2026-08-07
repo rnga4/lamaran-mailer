@@ -1103,6 +1103,12 @@ class JobBody:
     job_id: int
 
 
+@dataclass
+class StageBody:
+    email_id: int
+    stage: str
+
+
 @app.post("/api/batch/cancel")
 def batch_cancel(body: JobBody):
     db.cancel_batch_job(body.job_id)
@@ -1273,6 +1279,32 @@ def batch_progress(job_id: int):
     if not job:
         return {"error": "not found"}
     return job
+
+
+# ────────────────────────── TRACKER LAMARAN ──────────────────────────
+
+
+@app.get("/lamaran", response_class=HTMLResponse)
+def tracker_page(request: Request):
+    """Kanban board: lamaran terkirim dikelompokkan per tahap (pipeline)."""
+    applications = db.get_applications()
+    stage_stats = db.get_stage_stats()
+    total_apps = db.get_email_count(status_filter="sent")
+    return templates.TemplateResponse(
+        request, "tracker.html",
+        _ctx(request, applications=applications, stage_stats=stage_stats, total_apps=total_apps),
+    )
+
+
+@app.post("/api/tracker/stage")
+def tracker_set_stage(body: StageBody):
+    """Ubah tahap sebuah lamaran (drag & drop / dropdown di board)."""
+    ok = db.update_email_stage(body.email_id, body.stage)
+    if not ok:
+        return {"ok": False, "error": "Tahap tidak valid atau lamaran tidak ditemukan"}
+    # Balikin funnel asli dari server supaya angka statistik tetap benar
+    # (board hanya menampilkan 400 lamaran terbaru, tapi funnel hitung semua).
+    return {"ok": True, "stage": body.stage, "stage_stats": db.get_stage_stats()}
 
 
 # ────────────────────────── HISTORY ──────────────────────────

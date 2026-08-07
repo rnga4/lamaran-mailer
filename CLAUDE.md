@@ -63,6 +63,13 @@ docker compose up --build -d
 - `GMAIL_DAILY_LIMIT` **ditegakkan** (bukan hanya tampil di UI): kirim berhenti saat akun mencapai limit harian, pindah akun berikutnya
 - `RATE_LIMIT_PER_HOUR` global (999999 ≈ tanpa limit)
 
+### Tracker Lamaran (Kanban)
+- Halaman `/lamaran`: board 5 kolom **Applied → Follow-up → Interview → Offer → Ditolak**
+- Setiap lamaran terkirim (`status='sent'`) otomatis masuk sebagai `Applied` (kolom `stage` di tabel `emails`, default `applied`, + `stage_updated_at`)
+- **Drag & drop** antar kolom atau dropdown di tiap kartu (fallback mobile) → `POST /api/tracker/stage` (validasi stage di `VALID_STAGES`, hanya untuk email `sent`)
+- Board menampilkan **400 lamaran terbaru** (biar ringan); funnel statistik di atas menghitung **semua** lamaran (server: `get_stage_stats()`)
+- Kolom `stage` ikut diekspor di CSV riwayat (`/history/export`)
+
 ### Auth (opsional)
 - `APP_PASSWORD` di `.env` → seluruh UI + unduhan CV butuh login (`/login`); cookie session HMAC `APP_SECRET` (acak per boot kalau kosong)
 - `SMTP_SECURITY=ssl|starttls` per akun (default: SSL port 465, STARTTLS lainnya)
@@ -95,6 +102,7 @@ docker compose up --build -d
 | `POST /batch/{cancel,pause,resume,retry}/{id}` | Form aksi batch |
 | `POST /api/batch/{cancel,pause,resume,retry}` | API aksi batch (JSON `{job_id}`) |
 | `GET /api/batch-progress/{id}/stream` · `GET /api/batch-progress/{id}` | SSE live progress / snapshot |
+| `GET /lamaran` · `POST /api/tracker/stage` | Kanban tracker lamaran + ubah tahap |
 | `GET /history` · `GET /history/export` | Riwayat + **Export CSV** (tombol sudah ada di UI) |
 | `POST /history/{delete}/{id}` · `/history/bulk-delete` · `/history/clear` · `/history/retry/{id}` | Aksi riwayat |
 | `GET /dashboard` | Statistik |
@@ -169,14 +177,14 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 - Git: banyak file berubah **belum di-commit** (app.py, email_service.py, database.py, templates/*, dll + `templates/login.html` baru)
 
 ### Yang sudah dikerjakan di sesi terakhir
+0. **Tracker Lamaran (Kanban)** — halaman `/lamaran`, drag & drop 5 tahap, dropdown per kartu, funnel statistik; otomatis Applied saat kirim
 1. **4 desain email** — Premium Klasik (default), Minimal Modern, Elegant Dark, Editorial Serif; dropdown di form Kirim & Batch (desain tetap tersimpan di payload batch)
 2. **Kontak asli** (WA internasional, LinkedIn, GitHub) di `.env` + semua desain; fix bug `wa.me/0822…` → `wa.me/62822…`
 3. **Fitur Jam Kerja** — kartu pengaturan di `/batch`, batch auto-pause di luar jam kerja & lanjut otomatis; digabung dengan auto-pause kuota 500/hari (resume = max(tengah malam, jam kerja berikutnya)); auto-resume saat pengaturan diubah
 4. **Perbaikan bug** — cancel batch tidak lagi ketimpa jadi `done`; preview batch tampilkan posisi/CV (sebelumnya kosong); `render_body` aman dari variants parsial/bentrok; dead code `get_template_names()` dihapus; tema tidak reset ke dark saat pindah menu; toast dipindah pojok kanan atas; dropdown tema membuka ke atas; hamburger menu animasi; XSS di nama template ditutup
 
 ### Ide fitur yang belum dikerjakan (kandidat berikutnya)
-- **Tracker status lamaran** — pipeline Applied → Follow-up → Interview → Offer/Ditolak + statistik (paling berdampak)
-- **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari
+- **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari (hook-nya sudah ada: kolom `stage` + `stage_updated_at`)
 - **Kolom CSV opsional per baris** — `position` / `cv_file` / `extra` per baris (sekarang satu untuk semua)
 - **Desain acak per email di batch** — anti-pola deteksi spam
 - **Notifikasi Telegram** saat batch selesai/dijeda (perlu bot token + chat id)

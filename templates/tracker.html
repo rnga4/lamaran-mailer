@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Lamaran — Lamaran Mailer{% endblock %}
+{% block content %}
+
+<style>
+  .tracker-board {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(215px, 1fr));
+    gap: 14px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    align-items: start;
+  }
+  .tcol {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 12px;
+    min-height: 180px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .tcol.drag-over {
+    background: color-mix(in oklch, var(--primary) 8%, transparent);
+    border-color: var(--primary);
+  }
+  .tcol-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 0 2px; }
+  .tcol-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .tcol-title { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .tcol-count {
+    margin-left: auto; font-size: 0.7rem; font-weight: 700;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 99px; padding: 1px 9px; color: var(--muted-foreground);
+  }
+  .tcol-body { display: flex; flex-direction: column; gap: 10px; min-height: 60px; }
+  .tcard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    cursor: grab;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.15s, transform 0.15s, opacity 0.15s;
+    border-top: 3px solid var(--tcard-accent, var(--primary));
+  }
+  .tcard:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.09); transform: translateY(-1px); }
+  .tcard:active { cursor: grabbing; }
+  .tcard.dragging { opacity: 0.45; transform: scale(0.98); }
+  .tcard.tcard-flash { box-shadow: 0 0 0 3px color-mix(in oklch, var(--success) 45%, transparent); }
+  .tcard-company { font-size: 0.9rem; font-weight: 700; line-height: 1.3; }
+  .tcard-position { font-size: 0.76rem; color: var(--muted-foreground); margin-top: 3px; }
+  .tcard-meta { font-size: 0.68rem; color: var(--muted-foreground); margin-top: 8px; word-break: break-all; }
+  .tcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+  .tcard-date { font-size: 0.66rem; color: var(--muted-foreground); }
+  .tcard-stage {
+    font-size: 0.68rem; padding: 3px 6px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+    max-width: 118px; cursor: pointer;
+  }
+  .board-empty {
+    text-align: center; padding: 40px 20px;
+    color: var(--muted-foreground); font-size: 0.88rem;
+  }
+  @media (max-width: 1180px) { .tracker-board { grid-template-columns: repeat(5, 240px); } }
+</style>
+
+<div class="flex between" style="flex-wrap: wrap; gap: 10px;">
+  <div>
+    <div class="section-title">Tracker Lamaran</div>
+    <p class="muted" style="font-size: 0.84rem; margin-top: 4px;">
+      Geser kartu antar kolom (atau pakai dropdown di kartu) untuk mengubah tahap lamaran.
+    </p>
+  </div>
+  <span class="chip done">{{ total_apps }} total lamaran</span>
+</div>
+
+{% if total_apps > applications|length %}
+<div class="notice info" style="margin-top: 14px;">Papan menampilkan <strong>{{ applications|length }} lamaran terbaru</strong> dari {{ total_apps }} (biar tetap ringan). Statistik di atas tetap menghitung semua lamaran.</div>
+{% endif %}
+
+{% if not applications %}
+<div class="card">
+  <div class="card-title" style="margin-bottom: 6px;">Belum ada lamaran</div>
+  <p class="muted" style="font-size: 0.88rem;">
+    Email lamaran yang berhasil terkirim (dari halaman <a href="/">Kirim Email</a> atau <a href="/batch">Batch CSV</a>)
+    otomatis muncul di sini sebagai <strong>Applied</strong>. Mulai kirim, lalu pantau progresnya di papan ini.
+  </p>
+</div>
+{% endif %}
+
+{% set stage_colors = {
+  'applied': 'var(--primary)',
+  'follow_up': '#b45309',
+  'interview': '#7c3aed',
+  'offer': 'var(--success)',
+  'rejected': 'var(--destructive)',
+} %}
+{% set stage_labels = {
+  'applied': 'Applied',
+  'follow_up': 'Follow-up',
+  'interview': 'Interview',
+  'offer': 'Offer',
+  'rejected': 'Ditolak',
+} %}
+
+<div class="stat-grid" style="margin: 16px 0 20px;">
+  {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
+  <div class="card" style="padding: 14px 18px;">
+    <div class="flex between">
+      <span class="card-label" style="margin: 0;">{{ stage_labels[key] }}</span>
+      <span class="stat-value" id="stat-{{ key }}" style="font-size: 1.55rem; color: {{ stage_colors[key] }};">{{ stage_stats.get(key, 0) }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="tracker-board" id="trackerBoard">
+  {% for key in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
+  <div class="tcol" data-stage="{{ key }}" ondragover="onDragOver(event)" ondrop="onDrop(event)">
+    <div class="tcol-head">
+      <span class="tcol-dot" style="background: {{ stage_colors[key] }};"></span>
+      <span class="tcol-title">{{ stage_labels[key] }}</span>
+      <span class="tcol-count" id="count-{{ key }}">{{ applications | selectattr('stage', 'equalto', key) | list | length }}</span>
+    </div>
+    <div class="tcol-body" id="col-{{ key }}">
+      {% for a in applications if a.stage == key %}
+      <div class="tcard" draggable="true" data-id="{{ a.id }}" data-stage="{{ key }}"
+           style="--tcard-accent: {{ stage_colors[key] }};"
+           ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">
+        <div class="tcard-company">{{ a.company }}</div>
+        <div class="tcard-position">{{ a.position }}</div>
+        <div class="tcard-meta">{{ a.to_addr }}</div>
+        <div class="tcard-foot">
+          <span class="tcard-date">{{ a.created_at_fmt }}</span>
+          <select class="tcard-stage" onchange="moveViaSelect(this, {{ a.id }})" title="Ubah tahap">
+            {% for skey in ['applied', 'follow_up', 'interview', 'offer', 'rejected'] %}
+            <option value="{{ skey }}" {% if skey == a.stage %}selected{% endif %}>{{ stage_labels[skey] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let dragId = null;
+
+  function onDragStart(e) {
+    const card = e.target.closest('.tcard');
+    if (!card) return;
+    dragId = parseInt(card.dataset.id, 10);
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(dragId)); } catch (err) {}
+  }
+  function onDragEnd(e) {
+    e.target.classList.remove('dragging');
+    dragId = null;
+  }
+  function onDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    const col = e.currentTarget;
+    col.classList.remove('drag-over');
+    const stage = col.dataset.stage;
+    if (dragId === null) {
+      const raw = e.dataTransfer.getData('text/plain');
+      if (raw) dragId = parseInt(raw, 10);
+    }
+    if (!dragId) return;
+    // Di-drop ke kolom yang sama → tidak perlu panggil API / geser kartu
+    const card = document.querySelector('.tcard[data-id="' + dragId + '"]');
+    if (card && card.dataset.stage === stage) { dragId = null; return; }
+    moveCard(dragId, stage);
+    dragId = null;
+  }
+  document.querySelectorAll('.tcol').forEach(function(col) {
+    col.addEventListener('dragleave', function(ev) {
+      if (!col.contains(ev.relatedTarget)) col.classList.remove('drag-over');
+    });
+  });
+
+  function moveCard(emailId, stage) {
+    fetch('/api/tracker/stage', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email_id: emailId, stage: stage}),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res && res.ok) {
+        const card = document.querySelector('.tcard[data-id="' + emailId + '"]');
+        if (card) {
+          card.dataset.stage = stage;
+          const sel = card.querySelector('.tcard-stage');
+          if (sel) sel.value = stage;
+          const dest = document.getElementById('col-' + stage);
+          if (dest) dest.appendChild(card);
+          refreshCounts();
+          if (res.stage_stats) updateFunnel(res.stage_stats);
+          card.classList.add('tcard-flash');
+          setTimeout(function() { card.classList.remove('tcard-flash'); }, 400);
+        }
+      } else {
+        alert('Gagal mengubah tahap: ' + ((res && res.error) || 'Terjadi kesalahan'));
+      }
+    })
+    .catch(function() { alert('Gagal terhubung ke server'); });
+  }
+
+  function moveViaSelect(sel, emailId) {
+    moveCard(emailId, sel.value);
+  }
+
+  function refreshCounts() {
+    ['applied', 'follow_up', 'interview', 'offer', 'rejected'].forEach(function(stage) {
+      const col = document.getElementById('col-' + stage);
+      const n = col ? col.querySelectorAll('.tcard').length : 0;
+      const cnt = document.getElementById('count-' + stage);
+      if (cnt) cnt.textContent = n;
+    });
+  }
+
+  // Funnel statistik selalu dari server (menghitung SEMUA lamaran, bukan
+  // hanya 400 yang tampil di board) — jadi tidak pernah salah setelah drag.
+  function updateFunnel(stageStats) {
+    ['applied', 'follow_up', 'interview', 'offer', 'rejected'].forEach(function(stage) {
+      const stat = document.getElementById('stat-' + stage);
+      if (stat && stageStats[stage] !== undefined) stat.textContent = stageStats[stage];
+    });
+  }
+</script>
+{% endblock %}

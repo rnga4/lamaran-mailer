@@ -38,7 +38,7 @@ docker compose up --build -d
 | `serif` | Editorial Serif | kertas krem + Georgia serif + burgundy |
 
 - Dropdown di form **Kirim tunggal** dan **Batch**; pilihan disimpan lewat hidden field `template_name` dan masuk ke payload batch (retry/auto-lanjut tetap pakai desain yang sama)
-- Semua desain: layout tabel + inline style (kompatibel Gmail/Outlook), tombol WhatsApp/Email/LinkedIn/**GitHub**, 0 karakter `{`/`}` (aman untuk `str.format()`)
+- Semua desain: layout tabel + inline style (kompatibel Gmail/Outlook), tombol WhatsApp/Email/LinkedIn/**GitHub**; **responsif di HP**: tombol kontak memakai inline-block fluid dalam satu `<td>` (auto-wrap di 375px, tetap rapi walau Gmail membuang `<style>`) + `<style>` `@media (max-width:480px)` (stack tombol + padding kartu mengecil)
 - `render_body()`: variants (greeting/opening/closing/sender_*) **selalu disuntik**; variants parsial di-merge dengan default; kunci bentrok (`company`/`position`/`extra`) dibuang; error format → `ValueError` berisi daftar variabel yang tersedia
 
 ### Email Templates & Variabel
@@ -154,8 +154,9 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 
 ## Gotchas (penting, jangan diulang)
 
-- **`render_body` butuh 0 brace `{`/`}` di template** — semua desain HTML memakai inline style (bukan `<style>`), karena dirender via `str.format()`
+- **`render_body` butuh 0 brace `{`/`}` di template** — semua desain HTML memakai inline style (bukan `<style>`), karena dirender via `str.format()`. Satu-satunya pengecualian: blok `<style>` media query di desain bawaan **wajib kurung kurawal ganda** (`{{`/`}}` di source, jadi `{`/`}` di hasil akhir) — jangan pernah tulis brace polos
 - **Desain `dark` wajib meta `color-scheme: dark`** — tanpa itu Gmail/Apple Mail auto-invert dan teks putih jadi tak terbaca
+- **Tombol kontak = inline-block fluid satu `<td>`** (bukan `<td>` per tombol) — itu yang bikin wrap rapi di HP; kalau diubah balik ke `<td>` terpisah, baris tombol bakal overflow di 375px
 - **Tema**: jangan tulis `localStorage.getItem('lm-theme') || 'dark'` — string kosong itu tema Light yang VALID; dan jangan masukkan `''` ke array THEMES (`classList.remove('')` melempar SyntaxError)
 - **`wa.me` harus format internasional** — nomor diawali `0` otomatis diganti `62`
 - **Jangan timpa status batch** — setelah `pause/cancel`, jangan `update_batch_job(status='done')` (bug lama: cancel malah jadi done)

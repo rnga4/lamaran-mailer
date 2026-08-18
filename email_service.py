@@ -3,7 +3,9 @@ import os
 import random
 import re
 import smtplib
-from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
 from pathlib import Path
 from typing import Optional
 
@@ -62,10 +64,16 @@ HTML_TEMPLATE = """\
 <!DOCTYPE html>
 <html lang="id">
 <body style="margin:0;padding:0;background-color:#eef1f7;">
+<style>
+  @media (max-width: 480px) {{
+    .email-card td {{ padding-left:20px !important; padding-right:20px !important; }}
+    .btn-contact {{ display:block !important; margin:0 auto 10px auto !important; }}
+  }}
+</style>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef1f7;padding:32px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e4e8f1;box-shadow:0 10px 30px rgba(30,40,90,0.08);overflow:hidden;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e4e8f1;box-shadow:0 10px 30px rgba(30,40,90,0.08);overflow:hidden;">
           <tr>
             <td style="height:6px;font-size:0;line-height:0;background-color:#4f46e5;background:linear-gradient(90deg,#4f46e5,#8b5cf6);">&nbsp;</td>
           </tr>
@@ -112,14 +120,7 @@ HTML_TEMPLATE = """\
                 <span style="color:#1b2134;font-weight:700;">Hormat saya,</span><br>
                 <span style="font-size:17px;font-weight:800;color:#1b2134;">{sender_name}</span>
               </div>
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-                <tr>
-                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#25D366;text-decoration:none;">WhatsApp</a></td>
-                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#1a73e8;text-decoration:none;">Email</a></td>
-                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
-                  <td><a href="{github_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
-                </tr>
-              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;background-color:#eef1f7;border-radius:5em;padding:8px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);"><tr><td style="font-size:0;text-align:center;"><a href="{wa_link}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#25D366;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">wa</span></a><a href="mailto:{sender_email}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#4f46e5;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">mail</span></a><a href="{linkedin_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#8b5cf6;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">in</span></a><a href="{github_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#1b2134;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">gh</span></a></td></tr></table>
             </td>
           </tr>
           <tr>
@@ -149,10 +150,16 @@ HTML_TEMPLATE_MINIMAL = """\
 <!DOCTYPE html>
 <html lang="id">
 <body style="margin:0;padding:0;background-color:#fafafa;">
+<style>
+  @media (max-width: 480px) {{
+    .email-card td {{ padding-left:20px !important; padding-right:20px !important; }}
+    .btn-contact {{ display:block !important; margin:0 auto 10px auto !important; }}
+  }}
+</style>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fafafa;padding:48px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #e8e8e8;border-radius:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" style="max-width:560px;width:100%;background-color:#ffffff;border:1px solid #e8e8e8;border-radius:8px;">
           <tr>
             <td style="padding:44px 44px 6px 44px;">
               <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#9ca3af;margin-bottom:18px;">Lamaran Kerja</div>
@@ -195,15 +202,7 @@ HTML_TEMPLATE_MINIMAL = """\
                 <span style="color:#9ca3af;font-size:12px;">Hormat saya,</span><br>
                 <span style="font-size:17px;font-weight:600;color:#111111;">{sender_name}</span>
               </div>
-              <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:12.5px;color:#6b7280;margin-top:10px;line-height:1.7;">
-                <a href="{wa_link}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">WhatsApp</a>
-                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
-                <a href="mailto:{sender_email}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">{sender_email}</a>
-                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
-                <a href="{linkedin_url}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">LinkedIn</a>
-                <span style="color:#d1d5db;">&nbsp;&middot;&nbsp;</span>
-                <a href="{github_url}" style="color:#111111;text-decoration:underline;text-underline-offset:2px;">GitHub</a>
-              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;background-color:#f2f2f2;border-radius:5em;padding:8px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);"><tr><td style="font-size:0;text-align:center;"><a href="{wa_link}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#25D366;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">wa</span></a><a href="mailto:{sender_email}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#333333;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">mail</span></a><a href="{linkedin_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#0a66c2;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">in</span></a><a href="{github_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#24292e;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">gh</span></a></td></tr></table>
             </td>
           </tr>
           <tr>
@@ -228,10 +227,16 @@ HTML_TEMPLATE_DARK = """\
 <meta name="supported-color-schemes" content="dark">
 </head>
 <body style="margin:0;padding:0;background-color:#0f1222;color-scheme:dark;">
+<style>
+  @media (max-width: 480px) {{
+    .email-card td {{ padding-left:20px !important; padding-right:20px !important; }}
+    .btn-contact {{ display:block !important; margin:0 auto 10px auto !important; }}
+  }}
+</style>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0f1222;padding:40px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#161a2e;border:1px solid #2a3050;border-radius:14px;overflow:hidden;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" style="max-width:600px;width:100%;background-color:#161a2e;border:1px solid #2a3050;border-radius:14px;overflow:hidden;">
           <tr>
             <td style="height:5px;font-size:0;line-height:0;background-color:#e8b64c;">&nbsp;</td>
           </tr>
@@ -278,14 +283,7 @@ HTML_TEMPLATE_DARK = """\
                 <span style="color:#e8b64c;font-weight:700;">Hormat saya,</span><br>
                 <span style="font-size:17px;font-weight:700;color:#ffffff;">{sender_name}</span>
               </div>
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-                <tr>
-                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#25D366;text-decoration:none;">WhatsApp</a></td>
-                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#1a73e8;text-decoration:none;">Email</a></td>
-                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
-                  <td><a href="{github_url}" style="display:inline-block;padding:9px 18px;border-radius:999px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
-                </tr>
-              </table>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:16px auto 0 auto;background-color:#161a2e;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;background-color:#1c2138;border-radius:5em;padding:8px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.3);"><tr><td style="font-size:0;text-align:center;"><a href="{wa_link}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#25D366;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">wa</span></a><a href="mailto:{sender_email}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#4a7ccc;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">mail</span></a><a href="{linkedin_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#0a66c2;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">in</span></a><a href="{github_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#e8b64c;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#0f1222;display:inline-block;width:26px;line-height:26px;text-align:center;">gh</span></a></td></tr></table>
             </td>
           </tr>
           <tr>
@@ -304,10 +302,16 @@ HTML_TEMPLATE_EDITORIAL = """\
 <!DOCTYPE html>
 <html lang="id">
 <body style="margin:0;padding:0;background-color:#f6f1e7;">
+<style>
+  @media (max-width: 480px) {{
+    .email-card td {{ padding-left:20px !important; padding-right:20px !important; }}
+    .btn-contact {{ display:block !important; margin:0 auto 10px auto !important; }}
+  }}
+</style>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f6f1e7;padding:48px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;width:100%;background-color:#fffdf7;border:1px solid #e5dcc8;border-top:4px solid #8c2f39;border-radius:4px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-card" style="max-width:580px;width:100%;background-color:#fffdf7;border:1px solid #e5dcc8;border-top:4px solid #8c2f39;border-radius:4px;">
           <tr>
             <td style="padding:36px 44px 2px 44px;border-bottom:1px solid #ece4d2;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:10.5px;font-weight:700;letter-spacing:3.5px;text-transform:uppercase;color:#8c2f39;margin-bottom:12px;">Surat Lamaran Kerja</div>
@@ -345,15 +349,7 @@ HTML_TEMPLATE_EDITORIAL = """\
                 <span style="color:#8c2f39;font-style:italic;font-size:13px;">Hormat saya,</span><br>
                 <span style="font-size:18px;font-weight:700;color:#222222;">{sender_name}</span>
               </div>
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-                <tr>
-                  <td style="padding-right:8px;"><a href="{wa_link}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#8c2f39;text-decoration:none;">WhatsApp</a></td>
-                  <td style="padding-right:8px;"><a href="mailto:{sender_email}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#3a3a3a;text-decoration:none;">Email</a></td>
-                  <td style="padding-right:8px;"><a href="{linkedin_url}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#0a66c2;text-decoration:none;">LinkedIn</a></td>
-                  <td><a href="{github_url}" style="display:inline-block;padding:8px 16px;border-radius:4px;font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:700;color:#ffffff;background-color:#24292e;text-decoration:none;">GitHub</a></td>
-                </tr>
-              </table>
-            </td>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:16px auto 0 auto;background-color:#faf3e6;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px 0 0 0;background-color:#ede5d4;border-radius:5em;padding:8px 10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);"><tr><td style="font-size:0;text-align:center;"><a href="{wa_link}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#25D366;"><span style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">wa</span></a><a href="mailto:{sender_email}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#8c2f39;"><span style="font-family:Georgia,'Times New Roman',serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">mail</span></a><a href="{linkedin_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#5a4632;"><span style="font-family:Georgia,'Times New Roman',serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">in</span></a><a href="{github_url}" class="btn-contact" style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:0 4px;text-decoration:none;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.12);line-height:26px;vertical-align:middle;background-color:#3a3a3a;"><span style="font-family:Georgia,'Times New Roman',serif;font-size:9px;font-weight:700;color:#ffffff;display:inline-block;width:26px;line-height:26px;text-align:center;">gh</span></a></td></tr></table>            </td>
           </tr>
           <tr>
             <td style="padding:6px 44px 30px 44px;font-family:Georgia,'Times New Roman',serif;font-size:11px;color:#b0a48c;line-height:1.6;">
@@ -514,7 +510,7 @@ def build_email(
     cv_path: str,
     template_name: str = "html",
     additional_attachments: Optional[list[str]] = None,
-) -> tuple[EmailMessage, str, str]:
+) -> tuple[MIMEMultipart, str, str]:
     variants = _build_default_variants(company, position)
     plain_body = render_body(company, position, extra, "plain", variants=variants)
     html_body = render_body(company, position, extra, template_name, variants=variants)
@@ -526,37 +522,35 @@ def build_email(
             "(di-mount ke /app/cv di container) atau set --cv / env CV_PATH ke path yang benar."
         )
 
-    outer = EmailMessage()
+    outer = MIMEMultipart("mixed")
     outer["Subject"] = render_subject(position, company)
     outer["From"] = f"{from_name} <{from_addr}>"
     outer["Reply-To"] = from_addr
     outer["To"] = to_addr
-    outer.set_content(plain_body)
-    outer.add_alternative(html_body, subtype="html")
 
-    outer.add_attachment(
-        cv_file.read_bytes(),
-        maintype="application",
-        subtype="pdf",
-        filename=cv_file.name,
-    )
+    alternative = MIMEMultipart("alternative")
+    alternative.attach(MIMEText(plain_body, "plain", "utf-8"))
+    alternative.attach(MIMEText(html_body, "html", "utf-8"))
+    outer.attach(alternative)
+
+    outer.attach(MIMEBase("application", "pdf"))
+    outer.get_payload()[-1].set_payload(cv_file.read_bytes())
+    outer.get_payload()[-1]["Content-Disposition"] = f'attachment; filename="{cv_file.name}"'
 
     if additional_attachments:
         for path_str in additional_attachments:
             fp = Path(path_str)
             if fp.exists():
-                outer.add_attachment(
-                    fp.read_bytes(),
-                    maintype="application",
-                    subtype="pdf",
-                    filename=fp.name,
-                )
+                att = MIMEBase("application", "pdf")
+                att.set_payload(fp.read_bytes())
+                att["Content-Disposition"] = f'attachment; filename="{fp.name}"'
+                outer.attach(att)
 
     return outer, plain_body, html_body
 
 
 def send_email(
-    msg: EmailMessage,
+    msg: MIMEMultipart,
     host: str,
     port: int,
     user: str,

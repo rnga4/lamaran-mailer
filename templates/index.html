@@ -48,13 +48,84 @@
   </div>
 
   <div class="preview-block">
-    <div class="card-label">HTML Preview</div>
-    <div class="frame">
-      <iframe id="htmlPreview" style="min-height: 420px; border: none; width: 100%; display: block;" onload="this.style.height = this.contentDocument.body.scrollHeight + 40 + 'px'"></iframe>
+    <div class="flex between" style="flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+      <div class="card-label" style="margin: 0;">HTML Preview <span class="muted" style="font-weight:400; text-transform:none; letter-spacing:0;">(dikecilkan otomatis agar muat di layar)</span></div>
+      <div class="flex" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+        <select id="previewDesignSelect" class="field" style="padding: 4px 8px; font-size: 0.82rem; min-width: 160px;" onchange="switchPreviewDesign(this.value)">
+          {% for d in email_designs %}
+          <option value="{{ d.id }}" {% if preview.template_name == d.id %}selected{% endif %}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="pv-toggle" role="group" aria-label="Mode preview">
+          <button type="button" class="pv-btn" data-width="375" onclick="setPreviewWidth(375)">📱 HP · 375px</button>
+          <button type="button" class="pv-btn" data-width="600" onclick="setPreviewWidth(600)">🖥️ Desktop · 600px</button>
+        </div>
+      </div>
+    </div>
+    <div class="frame" id="htmlPreviewFrame">
+      <iframe id="htmlPreview" style="border: none; display: block;"></iframe>
     </div>
   </div>
   <script>
-    document.getElementById('htmlPreview').srcdoc = {{ preview.html_body | tojson }};
+    // Switch desain email tanpa reload halaman — fetch HTML baru dari API
+    function switchPreviewDesign(tpl) {
+      // Update hidden field supaya "Kirim Sekarang" pakai desain yg dipilih
+      var h = document.querySelector('input[name="template_name"]');
+      if (h) h.value = tpl;
+      // Fetch HTML baru
+      var fd = new FormData();
+      fd.append('to', '{{ preview.to | e }}');
+      fd.append('company', '{{ preview.company | e }}');
+      fd.append('position', '{{ preview.position | e }}');
+      fd.append('extra', '{{ preview.extra | e }}');
+      fd.append('cv_file', '{{ preview.cv_file | e }}');
+      fd.append('template_name', tpl);
+      fetch('/api/preview-html', { method: 'POST', body: fd })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+          var iframe = document.getElementById('htmlPreview');
+          iframe.srcdoc = html;
+          iframe.onload = fitHtmlPreview;
+        });
+    }
+    // Mode preview: HP (375px) atau Desktop (600px). Email dirender pada lebar
+    // yang dipilih, lalu diskalakan otomatis agar muat di layar kecil tanpa
+    // scroll horizontal. Pilihan disimpan di localStorage (seperti tema).
+    let previewDeviceWidth = 600;
+    try {
+      const savedW = parseInt(localStorage.getItem('lm-preview-width') || '600', 10);
+      if (savedW === 375 || savedW === 600) previewDeviceWidth = savedW;
+    } catch (e) { /* localStorage tidak tersedia — pakai default */ }
+    function setPreviewWidth(w) {
+      previewDeviceWidth = w;
+      try { localStorage.setItem('lm-preview-width', String(w)); } catch (e) {}
+      document.querySelectorAll('.pv-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.width) === w));
+      fitHtmlPreview();
+    }
+    function fitHtmlPreview() {
+      const iframe = document.getElementById('htmlPreview');
+      const frame = document.getElementById('htmlPreviewFrame');
+      if (!iframe || !frame || !iframe.contentDocument) return;
+      // Set lebar dulu supaya scrollHeight email akurat sesuai mode yang dipilih
+      iframe.style.width = previewDeviceWidth + 'px';
+      const body = iframe.contentDocument.body;
+      const contentH = (body && body.scrollHeight) || 420;
+      const avail = frame.clientWidth || window.innerWidth;
+      const scale = Math.min(1, avail / previewDeviceWidth);
+      iframe.style.height = (contentH + 40) + 'px';
+      iframe.style.transform = 'scale(' + scale + ')';
+      iframe.style.transformOrigin = 'top left';
+      iframe.style.marginLeft = Math.max(0, (avail - previewDeviceWidth * scale) / 2) + 'px';
+      frame.style.height = Math.ceil((contentH + 40) * scale) + 'px';
+    }
+    window.addEventListener('resize', function () {
+      if (document.getElementById('htmlPreview')) fitHtmlPreview();
+    });
+    const htmlPreviewEl = document.getElementById('htmlPreview');
+    htmlPreviewEl.addEventListener('load', fitHtmlPreview);
+    htmlPreviewEl.srcdoc = {{ preview.html_body | tojson }};
+    // Aktifkan tombol sesuai pilihan tersimpan (atau default)
+    document.querySelectorAll('.pv-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.width) === previewDeviceWidth));
   </script>
 
   <div class="flex" style="gap: 12px; flex-wrap: wrap;">
@@ -110,14 +181,7 @@
       {% endif %}
     </div>
   </div>
-  <div>
-    <label class="field-label">Desain Email</label>
-    <select name="template_name" class="field">
-      {% for d in email_designs %}
-      <option value="{{ d.id }}" {% if request.query_params.get('template_name') == d.id or (not request.query_params.get('template_name') and d.id == 'html') %}selected{% endif %}>{{ d.name }}{% if d.desc %} — {{ d.desc }}{% endif %}</option>
-      {% endfor %}
-    </select>
-  </div>
+    <input type="hidden" name="template_name" value="html">
     <div>
       <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
       <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..." class="field">{{ request.query_params.get('extra', '') }}</textarea>

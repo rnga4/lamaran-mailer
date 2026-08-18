@@ -521,6 +521,27 @@ def index(
     )
 
 
+@app.post("/api/preview-html")
+def api_preview_html(
+    to: str = Form(...),
+    company: str = Form(...),
+    position: str = Form("IT Support / DevOps"),
+    extra: str = Form(""),
+    cv_file: str = Form(""),
+    template_name: str = Form("html"),
+):
+    to = _trim(to)
+    company = _trim(company)
+    position = _trim(position) or "IT Support / DevOps"
+    extra = _trim(extra)
+    try:
+        variants = build_variants(company, position)
+        html_body = render_body(company, position, extra, template_name, variants=variants)
+    except (ValueError, KeyError) as e:
+        html_body = f"Error: {e}"
+    return HTMLResponse(content=html_body)
+
+
 @app.post("/preview", response_class=HTMLResponse)
 def preview(
     request: Request,

@@ -167,23 +167,21 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 
 ## Catatan Sesi Terakhir
 
-> Diperbarui: **7 Agustus 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
+> Diperbarui: **3 September 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
 
 ### Status saat ini
-- Container **berjalan** di `http://localhost:8086` (sudah rebuild dengan semua perubahan di bawah)
+- Container **berjalan** di `http://localhost:8086` (sudah rebuilt)
 - `SMTP_` 1 akun Gmail pribadi (App Password, FROM_NAME = nama asli)
 - Kontak terpasang di `.env` (nilai asli TIDAK disimpan di repo — lihat `.env`): WA otomatis format internasional, LinkedIn, GitHub
-- CV: file PDF di folder `cv/` (di-gitignore, tidak ikut ke repo)
+- CV: file PDF di folder `cv/` (di-gitignore, tidak ikut ke repo); file baru `Rangga_CV_ID_Revisi-2.pdf` & `Rangga_CV_EN_Revisi-2.pdf`, `CV_PATH` di `.env` → `Rangga_CV_ID_Revisi-2.pdf`
 - **Jam kerja OFF** (default) — pengaturan tersimpan di DB, `08:00–17:00`, Senin–Jumat
 - Tema default: Dark (Light = `''` di localStorage)
-- Git: banyak file berubah **belum di-commit** (app.py, email_service.py, database.py, templates/*, dll + `templates/login.html` baru)
+- Git: sudah push ke `origin/main` (branch main sudah track upstream)
 
 ### Yang sudah dikerjakan di sesi terakhir
-0. **Tracker Lamaran (Kanban)** — halaman `/lamaran`, drag & drop 5 tahap, dropdown per kartu, funnel statistik; otomatis Applied saat kirim
-1. **4 desain email** — Premium Klasik (default), Minimal Modern, Elegant Dark, Editorial Serif; dropdown di form Kirim & Batch (desain tetap tersimpan di payload batch)
-2. **Kontak asli** (WA internasional, LinkedIn, GitHub) di `.env` + semua desain; fix bug `wa.me/0822…` → `wa.me/62822…`
-3. **Fitur Jam Kerja** — kartu pengaturan di `/batch`, batch auto-pause di luar jam kerja & lanjut otomatis; digabung dengan auto-pause kuota 500/hari (resume = max(tengah malam, jam kerja berikutnya)); auto-resume saat pengaturan diubah
-4. **Perbaikan bug** — cancel batch tidak lagi ketimpa jadi `done`; preview batch tampilkan posisi/CV (sebelumnya kosong); `render_body` aman dari variants parsial/bentrok; dead code `get_template_names()` dihapus; tema tidak reset ke dark saat pindah menu; toast dipindah pojok kanan atas; dropdown tema membuka ke atas; hamburger menu animasi; XSS di nama template ditutup
+0. **Fix attachment PDF korup (base64)** — bug: PDF terkirim korup/blank karena `set_payload(raw_bytes)` tanpa encoding. Solusi di `email_service.py`: import `email.encoders`, tiap `MIMEBase("application","pdf")` (utama + `additional_attachments`) memakai `encoders.encode_base64()` + otomatis `Content-Transfer-Encoding: base64`
+1. **Update CV** — `CV_PATH` di `.env` diarahkan ke CV revisi terbaru; file baru otomatis muncul di dropdown web UI via `_get_cv_files()`
+2. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
 
 ### Ide fitur yang belum dikerjakan (kandidat berikutnya)
 - **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari (hook-nya sudah ada: kolom `stage` + `stage_updated_at`)

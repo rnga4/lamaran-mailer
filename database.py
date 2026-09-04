@@ -330,7 +330,7 @@ def export_emails_csv(
         writer.writerow([
             e["id"], e["created_at_fmt"], e["to_addr"], e["company"],
             e["position"], e["cv_file"], e["status"],
-            e.get("stage") or "",
+            e["stage"] or "",
             e["error"] or "",
             e["smtp_account"] or "",
         ])

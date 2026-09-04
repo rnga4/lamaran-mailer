@@ -80,6 +80,8 @@
       fd.append('extra', '{{ preview.extra | e }}');
       fd.append('cv_file', '{{ preview.cv_file | e }}');
       fd.append('template_name', tpl);
+      fd.append('experience', '{{ preview.experience | e }}');
+      fd.append('sender_name', '{{ preview.sender_name | e }}');
       fetch('/api/preview-html', { method: 'POST', body: fd })
         .then(function(r) { return r.text(); })
         .then(function(html) {
@@ -136,6 +138,8 @@
       <input type="hidden" name="extra" value="{{ preview.extra }}">
       <input type="hidden" name="cv_file" value="{{ preview.cv_file }}">
       <input type="hidden" name="template_name" value="{{ preview.template_name }}">
+      <input type="hidden" name="experience" value="{{ preview.experience }}">
+      <input type="hidden" name="sender_name" value="{{ preview.sender_name }}">
       <button type="submit" class="btn btn-block">Kirim Sekarang</button>
     </form>
     <a href="/" class="btn btn-ghost" style="flex: 1; min-width: 220px;">Kembali</a>
@@ -181,7 +185,22 @@
       {% endif %}
     </div>
   </div>
-    <input type="hidden" name="template_name" value="html">
+    <div>
+      <label class="field-label">Desain / Template Email</label>
+      <select name="template_name" class="field">
+        {% for d in email_designs %}
+        <option value="{{ d.id }}" {% if request.query_params.get('template_name') == d.id or (not request.query_params.get('template_name') and d.id == 'html') %}selected{% endif %}>{{ d.name }}{% if d.desc %} — {{ d.desc }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="field-label">Nama Perkenalan / Pengirim <span class="opt">(opsional)</span></label>
+      <input type="text" name="sender_name" value="{{ request.query_params.get('sender_name', '') }}" placeholder="Pakai nama dari SMTP kalau dikosongkan" class="field">
+    </div>
+    <div>
+      <label class="field-label">Pengalaman &amp; Keahlian <span class="opt">(opsional)</span></label>
+      <textarea name="experience" rows="4" placeholder="Kosongkan untuk pakai pengalaman default dari template..." class="field">{{ request.query_params.get('experience', '') }}</textarea>
+    </div>
     <div>
       <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
       <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..." class="field">{{ request.query_params.get('extra', '') }}</textarea>

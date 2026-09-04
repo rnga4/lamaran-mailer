@@ -39,12 +39,22 @@ docker compose up --build -d
 
 - Dropdown di form **Kirim tunggal** dan **Batch**; pilihan disimpan lewat hidden field `template_name` dan masuk ke payload batch (retry/auto-lanjut tetap pakai desain yang sama)
 - Semua desain: layout tabel + inline style (kompatibel Gmail/Outlook), tombol WhatsApp/Email/LinkedIn/**GitHub**; **responsif di HP**: tombol kontak memakai inline-block fluid dalam satu `<td>` (auto-wrap di 375px, tetap rapi walau Gmail membuang `<style>`) + `<style>` `@media (max-width:480px)` (stack tombol + padding kartu mengecil)
-- `render_body()`: variants (greeting/opening/closing/sender_*) **selalu disuntik**; variants parsial di-merge dengan default; kunci bentrok (`company`/`position`/`extra`) dibuang; error format → `ValueError` berisi daftar variabel yang tersedia
+- `render_body()`: variants (greeting/opening/closing/sender_*) **selalu disuntik**; variants parsial di-merge dengan default; kunci bentrok (`company`/`position`/`extra`) dibuang; error format → `ValueError` berisi daftar variabel yang tersedia. Param `plain=True` → ambil `template_data["body"]` (plain text) dari template kustom; kalau template kustom tidak ada → fallback `BODY_TEMPLATE`. `build_email()` dan rute preview plain text pakai `render_body(..., template_name, plain=True)` — bukan lagi hardcode `"plain"`
 
 ### Email Templates & Variabel
 - Template kustom: tabel `templates`, edit via UI `/templates-editor` (validasi nama: `[a-zA-Z0-9 ._\-]`, max 50)
-- Variabel: `{company}` `{position}` `{extra}` `{greeting}` `{opening}` `{closing}` `{sender_name}` `{sender_phone}` `{sender_email}` `{sender_linkedin}` `{sender_github}` `{wa_link}` `{linkedin_url}` `{github_url}`
+- **Simpla UI**: cuma 1 kotak utama "Isi Email" (**plain text**, wajib) — tulis seperti pesan biasa, kosong baris = paragraf. Field "HTML" opsional & disembunyikan di dalam `<details>` "Mode HTML". Kalau HTML dikosongkan saat save → **auto-generate** dari plain text via `_plain_to_html()` di `app.py`. Jadi cukup isi kotak plain aja.
+- **Tombol variabel klik-sisip** di `/templates-editor`: tombol berlabel manusiawi (mis. "+ Nama perusahaan") dengan atribut `data-insert="{company}"` dalam `<template>`; JS menyisipkan token ke textarea yang sedang fokus (fallback: textarea plain pertama)
+- Variabel: `{company}` `{position}` `{extra}` `{experience}` `{greeting}` `{opening}` `{closing}` `{sender_name}` `{sender_phone}` `{sender_email}` `{sender_linkedin}` `{sender_github}` `{wa_link}` `{linkedin_url}` `{github_url}`
+- **`{experience}` (paragraf "Pengalaman & Keahlian")**: punya nilai default (`EXPERIENCE_DEFAULT` di `email_service.py`); dipakai ulang di `BODY_TEMPLATE` + 4 desain HTML; kosong di form → pakai default. Template kustom yang tidak punya `{experience}` tetap aman (kwarg ekstra diabaikan `str.format`)
 - Kontak pengirim dari env: `SENDER_PHONE` (**`wa.me` otomatis normalisasi 0→62**, mis. `0822…` → `wa.me/62822…`), `SENDER_LINKEDIN`, `SENDER_GITHUB`
+
+### Kirim Tunggal — Override Nama & Pengalaman (per-kirim)
+- Form **Kirim tunggal** punya 2 field opsional: **Nama Perkenalan / Pengirim** (`sender_name`) & **Pengalaman & Keahlian** (`experience`)
+- `sender_name` menggantikan nama di badan email (paragraf pembuka `{opening}` **dan** tanda tangan `{sender_name}`); kosong → pakai `SMTP_FROM_NAME` dari env
+- `experience` menggantikan paragraf pengalaman (variable `{experience}`); kosong → pakai `EXPERIENCE_DEFAULT`
+- Mengalir lewat `/preview`, `/api/preview-html`, `/send`, `_try_send_with_failover`, `build_email`; hidden field diteruskan di form "Kirim Sekarang"
+- Versi HTML di-`html.escape()` (anti-injeksi); tetap tampil konsisten di plain + HTML karena `build_email` render keduanya dari `variants` yang sama
 
 ### Batch Sending
 - CSV kolom `email` + `company` (atau `nama_pt`); upload preview → validasi (duplikat, sudah pernah dikirim, email invalid) → `POST /batch/send`
@@ -167,7 +177,7 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 
 ## Catatan Sesi Terakhir
 
-> Diperbarui: **3 September 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
+> Diperbarui: **4 September 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
 
 ### Status saat ini
 - Container **berjalan** di `http://localhost:8086` (sudah rebuilt)
@@ -179,9 +189,12 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 - Git: sudah push ke `origin/main` (branch main sudah track upstream)
 
 ### Yang sudah dikerjakan di sesi terakhir
-0. **Fix attachment PDF korup (base64)** — bug: PDF terkirim korup/blank karena `set_payload(raw_bytes)` tanpa encoding. Solusi di `email_service.py`: import `email.encoders`, tiap `MIMEBase("application","pdf")` (utama + `additional_attachments`) memakai `encoders.encode_base64()` + otomatis `Content-Transfer-Encoding: base64`
-1. **Update CV** — `CV_PATH` di `.env` diarahkan ke CV revisi terbaru; file baru otomatis muncul di dropdown web UI via `_get_cv_files()`
-2. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
+0. **Override Nama Perkenalan & Pengalaman di Kirim Tunggal** — form Kirim tunggal kini punya 2 field opsional `sender_name` & `experience`. Variabel `{experience}` baru (default `EXPERIENCE_DEFAULT`) menggantikan paragraf pengalaman hardcoded di `BODY_TEMPLATE` + 4 desain HTML. `sender_name` ikut mengganti paragraf pembuka `{opening}` (fix: variants dibangun dengan `sender_name` biar opening gak stale). Mengalir lewat `/preview`, `/api/preview-html`, `/send`, `_try_send_with_failover`, `build_email`; HTML di-`html.escape()`. Backward compatible: kosong → default; template kustom tanpa `{experience}` aman.
+1. **Fix bug: plain text template kustom tidak terpakai** — `render_body`/`build_email`/rute `/preview` sebelumnya hardcode `"plain"` → cuma nyari template bernama `"plain"` (tak pernah ada) → selalu fallback ke `BODY_TEMPLATE`. Solusi: tambah param `plain: bool` di `render_body()`; `build_email()` & `/preview` kini render plain text via `render_body(..., template_name, plain=True)` → pakai `template_data["body"]` dari template kustom yang dipilih; fallback `BODY_TEMPLATE` kalau template kustom tak ada (backward compatible)
+2. **Plain text auto-generate** — `app.py` tambah `_plain_to_html()` (baris baru → `<br>`/`</p>`, escape entity); `save_template()` jadikan field `html_body` opsional, auto-generate dari plain text kalau dikosongkan
+3. **Simpla UI editor template** — `/templates-editor` jadi 1 kotak utama "Isi Email" (**plain text**), HTML di-<details> "Mode HTML" opsional, panduan 4 langkah, panel tombol variabel klik-sisip (label manusiawi + `data-insert` dalam `<template>`), form template baru sudah ada contoh isi
+4. **Fix attachment PDF korup (base64)** — (sesi sebelumnya) pastikan nggak hilang dari konteks
+5. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
 
 ### Ide fitur yang belum dikerjakan (kandidat berikutnya)
 - **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari (hook-nya sudah ada: kolom `stage` + `stage_updated_at`)

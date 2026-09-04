@@ -47,7 +47,7 @@ BODY_TEMPLATE = """{greeting}
 
 {opening}
 
-Saya berpengalaman sebagai IT Support / System Administrator dengan keahlian mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python).{extra}
+{experience}.{extra}
 
 Bersama email ini saya lampirkan CV dan dokumen pendukung lainnya untuk pertimbangan lebih lanjut. Saya sangat terbuka untuk dihubungi guna proses seleksi selanjutnya.
 
@@ -60,6 +60,15 @@ Hormat saya,
 {sender_linkedin}
 {sender_github}
 """
+
+# Paragraf "Pengalaman & Keahlian" default — dipakai bila pengguna tidak
+# mengisinya di form. Bisa di-custom per kirim via variabel {experience}.
+EXPERIENCE_DEFAULT = (
+    "Saya berpengalaman sebagai IT Support / System Administrator dengan keahlian "
+    "mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), "
+    "administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, "
+    "serta pengembangan sistem/aplikasi internal (FastAPI, Node.js, Python)"
+)
 
 HTML_TEMPLATE = """\
 <!DOCTYPE html>
@@ -102,7 +111,7 @@ HTML_TEMPLATE = """\
                 <tr>
                   <td style="padding:16px 20px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.75;color:#414a5e;">
                     <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#4f46e5;margin-bottom:6px;">Pengalaman &amp; Keahlian</div>
-                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                    {experience}.{extra}
                   </td>
                 </tr>
               </table>
@@ -184,7 +193,7 @@ HTML_TEMPLATE_MINIMAL = """\
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td style="border-left:2px solid #111111;padding:2px 0 2px 18px;font-family:'Helvetica Neue',Arial,sans-serif;font-size:13.5px;line-height:1.85;color:#444444;">
-                    IT Support / System Administrator &mdash; mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                    {experience}.{extra}
                   </td>
                 </tr>
               </table>
@@ -265,7 +274,7 @@ HTML_TEMPLATE_DARK = """\
                 <tr>
                   <td style="padding:16px 20px;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.75;color:#b9bfd9;">
                     <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#e8b64c;margin-bottom:6px;">Pengalaman &amp; Keahlian</div>
-                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                    {experience}.{extra}
                   </td>
                 </tr>
               </table>
@@ -331,7 +340,7 @@ HTML_TEMPLATE_EDITORIAL = """\
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#faf3e6;border-left:3px solid #8c2f39;">
                 <tr>
                   <td style="padding:14px 20px;font-family:Georgia,'Times New Roman',serif;font-size:13.5px;font-style:italic;line-height:1.8;color:#5a4632;">
-                    IT Support / System Administrator — mengelola infrastruktur server Linux (Docker, migrasi ke Kubernetes/k3s), administrasi jaringan (MikroTik, VLAN, FreeRADIUS), reverse proxy multi-domain, serta pengembangan sistem internal (FastAPI, Node.js, Python).{extra}
+                    {experience}.{extra}
                   </td>
                 </tr>
               </table>
@@ -410,13 +419,16 @@ def set_template(name: str, content: str) -> None:
     set_setting(f"template_{name}", content)
 
 
-def _build_default_variants(company: str, position: str) -> dict[str, str]:
+def _build_default_variants(
+    company: str, position: str, sender_name: Optional[str] = None
+) -> dict[str, str]:
     """Satu set greeting/opening/closing acak + data pengirim.
 
     Dipakai sekali per email lalu dibagi ke bagian plain-text & HTML
     supaya kedua versi isinya konsisten (dan preview = email).
     """
-    sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
+    if not sender_name:
+        sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
     sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
     sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
     sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
@@ -446,9 +458,11 @@ def _build_default_variants(company: str, position: str) -> dict[str, str]:
     }
 
 
-def build_variants(company: str, position: str) -> dict[str, str]:
+def build_variants(
+    company: str, position: str, sender_name: Optional[str] = None
+) -> dict[str, str]:
     """Public helper: satu set variabel acak untuk preview/email."""
-    return _build_default_variants(company, position)
+    return _build_default_variants(company, position, sender_name=sender_name)
 
 
 def render_body(
@@ -457,13 +471,22 @@ def render_body(
     extra: str = "",
     template_name: str = "plain",
     variants: Optional[dict[str, str]] = None,
+    plain: bool = False,
+    experience: Optional[str] = None,
+    sender_name: Optional[str] = None,
 ) -> str:
     from database import get_template_by_name
 
     # Try templates table by name
     template_data = get_template_by_name(template_name)
     if template_data:
-        tpl = template_data["html_body"] if template_name != "plain" else template_data["body"]
+        if plain:
+            tpl = template_data["body"]
+        else:
+            tpl = template_data["html_body"] if template_name != "plain" else template_data["body"]
+    elif plain:
+        # Plain text tanpa template kustom → pakai default plain
+        tpl = get_template("plain")
     else:
         from database import get_setting
         custom = get_setting(f"template_{template_name}")
@@ -472,31 +495,43 @@ def render_body(
     # 'extra' adalah teks biasa — escape di HTML agar tidak bisa menyelipkan
     # HTML/script ke email maupun merusak halaman preview.
     if extra:
-        extra_text = f" {html.escape(extra)}" if template_name != "plain" else f" {extra}"
+        extra_text = f" {html.escape(extra)}" if (template_name != "plain" and not plain) else f" {extra}"
     else:
         extra_text = ""
+
+    # Paragraf "Pengalaman & Keahlian": kalau diisi → custom, kalau kosong
+    # → pakai default. Untuk versi HTML, escape agar angka/karakter aman.
+    experience_text = experience.strip() if experience and experience.strip() else EXPERIENCE_DEFAULT
+    if plain:
+        experience_text = experience_text
+    else:
+        experience_text = html.escape(experience_text)
 
     # Variabel variant (greeting/opening/closing/sender_*) selalu disuntik untuk
     # SEMUA template — kwarg yang tidak dipakai oleh .format() otomatis diabaikan,
     # jadi aman untuk template kustom yang hanya memakai {company}/{position}/{extra}.
     if variants is None:
-        variants = _build_default_variants(company, position)
+        variants = _build_default_variants(company, position, sender_name=sender_name)
     else:
         # Variants parsial (mis. dari pemanggil eksternal): lengkapi dengan default
         # supaya placeholder variant apa pun tetap tersubstitusi. Kunci yang
         # bentrok dengan argumen .format() (company/position/extra) dibuang agar
         # tidak memicu TypeError 'got multiple values'.
-        merged = _build_default_variants(company, position)
+        merged = _build_default_variants(company, position, sender_name=sender_name)
         merged.update(variants)
         for k in ("company", "position", "extra"):
             merged.pop(k, None)
         variants = merged
+    # Suntikkan variabel {experience} sebagai nilai akhir (default / custom).
+    variants["experience"] = experience_text
+    if sender_name:
+        variants["sender_name"] = sender_name
     try:
         return tpl.format(company=company, position=position, extra=extra_text, **variants)
     except KeyError as e:
         raise ValueError(
             f"Template menggunakan variabel {e} yang tidak dikenal. "
-            "Variabel yang tersedia: company, position, extra, greeting, opening, "
+            "Variabel yang tersedia: company, position, experience, extra, greeting, opening, "
             "closing, sender_name, sender_phone, sender_email, sender_linkedin, sender_github, wa_link, linkedin_url, github_url"
         )
 
@@ -511,10 +546,12 @@ def build_email(
     cv_path: str,
     template_name: str = "html",
     additional_attachments: Optional[list[str]] = None,
+    experience: Optional[str] = None,
+    sender_name: Optional[str] = None,
 ) -> tuple[MIMEMultipart, str, str]:
-    variants = _build_default_variants(company, position)
-    plain_body = render_body(company, position, extra, "plain", variants=variants)
-    html_body = render_body(company, position, extra, template_name, variants=variants)
+    variants = _build_default_variants(company, position, sender_name=sender_name)
+    plain_body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name)
+    html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
 
     cv_file = Path(cv_path)
     if not cv_file.exists():

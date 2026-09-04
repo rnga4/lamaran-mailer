@@ -2,50 +2,52 @@
 {% block title %}Edit Template — Lamaran Mailer{% endblock %}
 {% block content %}
 
-<div class="notice info">
-  <div style="font-size: 0.85rem;">
-    <span style="font-weight: 700;">Variabel:</span>
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{company}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{position}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{extra}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{greeting}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{opening}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{closing}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_name}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_phone}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_email}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_linkedin}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{sender_github}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{wa_link}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{linkedin_url}</code>,
-    <code style="background: color-mix(in oklch, var(--primary) 14%, transparent); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono); font-size: 0.78rem;">{github_url}</code>
+<div class="notice info" style="line-height: 1.7;">
+  <div style="font-weight: 600; margin-bottom: 4px;">Cara pakai (mudah)</div>
+  <ol style="margin: 0; padding-left: 20px; font-size: 0.85rem;">
+    <li>Ketik isi emailmu di kotak, persis seperti menulis pesan biasa.</li>
+    <li>Biar kosong baris untuk membuat paragraf baru.</li>
+    <li>Klik tombol <strong>+ Nama perusahaan</strong> dll. untuk menyisipkan kata yang otomatis diganti isi aslinya.</li>
+    <li>Klik <strong>Simpan</strong>. Selesai!</li>
+  </ol>
+</div>
+
+<div class="card" style="background: color-mix(in oklch, var(--primary) 6%, transparent); border-style: dashed;">
+  <div style="font-weight: 600; margin-bottom: 8px; font-size: 0.9rem;">Kata-kata ajaib (klik untuk menyisipkan)</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+    {% for var in [('company', 'Nama perusahaan'), ('position', 'Posisi kerja'), ('sender_name', 'Nama kamu'), ('experience', 'Pengalaman & keahlian'), ('greeting', 'Sapaan pembuka'), ('opening', 'Paragraf pembuka'), ('closing', 'Penutup'), ('wa_link', 'Tautan WhatsApp'), ('linkedin_url', 'Tautan LinkedIn'), ('github_url', 'Tautan GitHub'), ('extra', 'Kalimat tambahan')] %}
+    <button type="button" class="btn btn-sm" data-insert="{{ '{' }}{{ var[0] }}{{ '}' }}" title="Klik untuk menyisipkan {{ var[1] }}">+ {{ var[1] }}</button>
+    {% endfor %}
   </div>
-  <div class="muted" style="font-size: 0.78rem; margin-top: 6px;">Template yang disimpan otomatis muncul di dropdown "Desain Email" pada halaman Kirim &amp; Batch.</div>
 </div>
 
 {% for t in templates %}
 <div class="card" style="padding: 0;">
   <div class="flex between" style="padding: 18px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px;">
     <h2 style="font-family: var(--font-display); font-size: 1rem; font-weight: 600;">Template: <span class="mono" style="color: var(--primary);">{{ t.name }}</span></h2>
-    <button type="button" onclick="toggleTemplate({{ loop.index }})" class="btn btn-sm btn-ghost">Sembunyikan</button>
+    <button type="button" onclick="toggleTemplate({{ loop.index }})" class="btn btn-sm btn-ghost">Buka/Tutup</button>
   </div>
   <div id="tpl-{{ loop.index }}" style="padding: 24px;">
     <form method="post" action="/templates-editor/save" style="display: flex; flex-direction: column; gap: 16px;">
       <input type="hidden" name="name" value="{{ t.name }}">
       <div>
-        <label class="field-label">Plain Text</label>
-        <textarea name="body" rows="8" class="field mono" style="line-height: 1.6;">{{ t.body }}</textarea>
+        <label class="field-label">Isi Email <span class="muted" style="font-weight: 400;">— tulis seperti pesan biasa. Kosong baris = paragraf baru.</span></label>
+        <textarea name="body" rows="14" class="field mono" style="line-height: 1.8;" data-plain="1">{{ t.body }}</textarea>
       </div>
-      <div>
-        <label class="field-label">HTML</label>
-        <textarea name="html_body" rows="14" class="field mono" style="line-height: 1.6;">{{ t.html_body }}</textarea>
-      </div>
+      <details style="margin-top: 4px;">
+        <summary style="cursor: pointer; font-size: 0.85rem; color: var(--muted, var(--primary));">Mode HTML (untuk yang sudah ahli — biasanya tidak perlu)</summary>
+        <div style="margin-top: 12px;">
+          <label class="field-label">HTML — kosongkan supaya dibuat otomatis dari kotak di atas</label>
+          <textarea name="html_body" rows="12" class="field mono" style="line-height: 1.6;" data-html="1">{{ t.html_body }}</textarea>
+        </div>
+      </details>
       <div class="flex" style="gap: 10px;">
         <button type="submit" class="btn">Simpan</button>
         {% if templates|length > 1 %}
         <button type="button" onclick='confirmDelete({{ t.name | tojson }})' class="btn btn-danger">Hapus</button>
         {% endif %}
       </div>
+      <div class="muted" style="font-size: 0.78rem;">Tip: HTML yang dikosongkan akan dibuat otomatis dari isi kotak di atas.</div>
     </form>
   </div>
 </div>
@@ -55,17 +57,20 @@
   <div class="card-title">Tambah Template Baru</div>
   <div style="display: flex; flex-direction: column; gap: 16px;">
     <div>
-      <label class="field-label">Nama Template</label>
-      <input type="text" name="name" required placeholder="misal: formal, singkat, santai" class="field">
+      <label class="field-label">Nama Template <span class="muted" style="font-weight: 400;">— misal: formal, singkat, santai</span></label>
+      <input type="text" name="name" required placeholder="misal: formal" class="field">
     </div>
     <div>
-      <label class="field-label">Plain Text</label>
-      <textarea name="body" rows="6" class="field mono" style="line-height: 1.6;" placeholder="Template plain text..."></textarea>
+      <label class="field-label">Isi Email <span class="muted" style="font-weight: 400;">— tulis seperti pesan biasa. Kosong baris = paragraf baru.</span></label>
+      <textarea name="body" rows="12" class="field mono" style="line-height: 1.8;" data-plain="1" placeholder="Kepada Yth. Tim Rekrutmen {company},&#10;&#10;Saya {sender_name} melamar posisi {position}.&#10;&#10;{closing}"></textarea>
     </div>
-    <div>
-      <label class="field-label">HTML</label>
-      <textarea name="html_body" rows="10" class="field mono" style="line-height: 1.6;" placeholder="Template HTML..."></textarea>
-    </div>
+    <details style="margin-top: 4px;">
+      <summary style="cursor: pointer; font-size: 0.85rem; color: var(--muted, var(--primary));">Mode HTML (untuk yang sudah ahli — biasanya tidak perlu)</summary>
+      <div style="margin-top: 12px;">
+        <label class="field-label">HTML — kosongkan supaya dibuat otomatis dari kotak di atas</label>
+        <textarea name="html_body" rows="10" class="field mono" style="line-height: 1.6;" data-html="1"></textarea>
+      </div>
+    </details>
     <div>
       <button type="submit" class="btn">Tambah Template</button>
     </div>
@@ -91,5 +96,37 @@ function confirmDelete(name) {
     document.getElementById('deleteForm').submit();
   }
 }
+
+function plainToHtml(text) {
+  return text.split(/\n\s*\n/).map(function (para) {
+    return '<p>' + para.replace(/\n+/g, ' ').trim() + '</p>';
+  }).join('\n');
+}
+
+document.querySelectorAll('[data-insert]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    const token = btn.getAttribute('data-insert');
+    const all = document.querySelectorAll('textarea[data-plain="1"]');
+    let ta = document.activeElement;
+    if (!ta || ta.tagName !== 'TEXTAREA') {
+      ta = all[0];
+    }
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = start + token.length;
+  });
+});
+
+document.querySelectorAll('form[action="/templates-editor/save"]').forEach(function (form) {
+  form.addEventListener('submit', function () {
+    const plain = form.querySelector('textarea[name="body"]');
+    const html = form.querySelector('textarea[name="html_body"]');
+    if (html && plain && html.value.trim() === '') {
+      html.value = plainToHtml(plain.value);
+    }
+  });
+});
 </script>
 {% endblock %}

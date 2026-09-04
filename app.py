@@ -3,6 +3,7 @@ import csv
 import datetime
 import hashlib
 import hmac
+import html as html_mod
 import io
 import json
 import os
@@ -125,6 +126,8 @@ def _try_send_with_failover(
     extra: str,
     cv_path: str,
     template_name: str = "html",
+    experience: Optional[str] = None,
+    sender_name: Optional[str] = None,
 ) -> tuple[bool, str, str]:
     if not SMTP_ACCOUNTS:
         raise RuntimeError("No SMTP accounts configured")
@@ -158,6 +161,8 @@ def _try_send_with_failover(
                     from_name=acct.from_name,
                     cv_path=cv_path,
                     template_name=template_name,
+                    experience=experience,
+                    sender_name=sender_name,
                 )
                 send_email(msg, acct.host, acct.port, acct.user, acct.password, use_ssl=acct.use_ssl)
                 db.use_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
@@ -529,14 +534,18 @@ def api_preview_html(
     extra: str = Form(""),
     cv_file: str = Form(""),
     template_name: str = Form("html"),
+    experience: str = Form(""),
+    sender_name: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
     position = _trim(position) or "IT Support / DevOps"
     extra = _trim(extra)
+    experience = _trim(experience)
+    sender_name = _trim(sender_name)
     try:
-        variants = build_variants(company, position)
-        html_body = render_body(company, position, extra, template_name, variants=variants)
+        variants = build_variants(company, position, sender_name=sender_name)
+        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
     except (ValueError, KeyError) as e:
         html_body = f"Error: {e}"
     return HTMLResponse(content=html_body)
@@ -551,18 +560,22 @@ def preview(
     extra: str = Form(""),
     cv_file: str = Form(""),
     template_name: str = Form("html"),
+    experience: str = Form(""),
+    sender_name: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
     position = _trim(position) or "IT Support / DevOps"
     extra = _trim(extra)
+    experience = _trim(experience)
+    sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
     if not cv_file:
         return RedirectResponse(url="/?message=Pilih+file+CV+untuk+preview&msg_type=error", status_code=303)
     try:
-        variants = build_variants(company, position)
-        body = render_body(company, position, extra, "plain", variants=variants)
-        html_body = render_body(company, position, extra, template_name, variants=variants)
+        variants = build_variants(company, position, sender_name=sender_name)
+        body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name)
+        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
     except (ValueError, KeyError) as e:
         body = f"Error: {e}"
         html_body = f"Error: {e}"
@@ -580,6 +593,8 @@ def preview(
                 "extra": extra,
                 "cv_file": cv_file,
                 "template_name": template_name,
+                "experience": experience,
+                "sender_name": sender_name,
                 "body": body,
                 "html_body": html_body,
             },
@@ -595,11 +610,15 @@ def send_single(
     extra: str = Form(""),
     cv_file: str = Form(""),
     template_name: str = Form("html"),
+    experience: str = Form(""),
+    sender_name: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
     position = _trim(position) or "IT Support / DevOps"
     extra = _trim(extra)
+    experience = _trim(experience)
+    sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
 
     if not cv_file:
@@ -634,7 +653,10 @@ def send_single(
         )
 
     try:
-        success, key, err = _try_send_with_failover(to, company, position, extra, cv_path, template_name=template_name)
+        success, key, err = _try_send_with_failover(
+            to, company, position, extra, cv_path,
+            template_name=template_name, experience=experience, sender_name=sender_name,
+        )
         if success:
             db.log_email(to, company, position, extra, safe_cv, "sent", smtp_account=key)
             return RedirectResponse(
@@ -1562,20 +1584,43 @@ def templates_editor_page(request: Request, message: str = "", msg_type: str = "
     )
 
 
+def _html_to_plain(html_text: str) -> str:
+    """Strip HTML tags dan unescape entities → plain text sederhana."""
+    text = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    text = re.sub(r"</(p|div|tr|li|h[1-6]|td|th)>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html_mod.unescape(text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _plain_to_html(plain_text: str) -> str:
+    """Wrap paragraf plain text (dipisah baris kosong) menjadi tag <p> HTML."""
+    paragraphs = re.split(r"\n\s*\n", plain_text.strip())
+    html_parts = []
+    for para in paragraphs:
+        line = re.sub(r"\s*\n\s*", " ", para).strip()
+        if line:
+            html_parts.append(f"<p>{line}</p>")
+    return "\n".join(html_parts)
+
+
 @app.post("/templates-editor/save")
 def save_template(
     name: str = Form(...),
     body: str = Form(...),
-    html_body: str = Form(...),
+    html_body: str = Form(""),
 ):
     name = _trim(name)
     body = _trim(body)
     html_body = _trim(html_body)
-    if not name or not body or not html_body:
+    if not name or not body:
         return RedirectResponse(
-            url="/templates-editor?message=Semua+field+wajib+diisi&msg_type=error",
+            url="/templates-editor?message=Nama+template+dan+isi+email+wajib+diisi&msg_type=error",
             status_code=303,
         )
+    if not html_body:
+        html_body = _plain_to_html(body)
     if len(name) > 50 or not re.fullmatch(r"[a-zA-Z0-9 ._\-]+", name):
         return RedirectResponse(
             url="/templates-editor?message=Nama+template+hanya+boleh+huruf,+angka,+spasi,+titik,+strip+dan+underscore+(maks+50)&msg_type=error",
@@ -1586,6 +1631,7 @@ def save_template(
     # tidak menolak template yang memakainya.
     _dummy_variants = {
         "greeting": "Test", "opening": "Test", "closing": "Test",
+        "experience": "Test",
         "sender_name": "Test", "sender_phone": "Test", "sender_email": "Test",
         "sender_linkedin": "Test", "sender_github": "Test",
         "wa_link": "Test", "linkedin_url": "Test", "github_url": "Test",

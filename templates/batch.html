@@ -478,6 +478,12 @@
   </div>
   {% endif %}
 
+  {% if doc_file %}
+  <div style="background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px; font-size: 0.85rem;">
+    <span class="muted">Dokumen Tambahan:</span> <span style="margin-left: 6px;">{{ doc_file }}</span>
+  </div>
+  {% endif %}
+
   {% if duplicate_rows %}
   <div class="notice info" style="margin-bottom: 14px;">
     {{ duplicate_rows|length }} perusahaan duplikat (hanya yang pertama dikirim):
@@ -542,6 +548,7 @@
   <form method="post" action="/batch/send" data-loading data-confirm="Kirim {{ rows|length }} email lamaran sekarang?" id="sendForm">
     <input type="hidden" name="cache_key" value="{{ cache_key }}">
     <input type="hidden" name="template_name" value="{{ template_name }}">
+    <input type="hidden" name="doc_file" value="{{ doc_file }}">
     <input type="hidden" name="scheduled_at" id="scheduledEpoch" value="">
     <div>
       <label class="field-label">Mulai Kirim <span class="opt">(opsional — kosong = langsung)</span></label>
@@ -586,6 +593,20 @@
         <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
         {% endif %}
       </div>
+    </div>
+    <div>
+      <label class="field-label">Dokumen Tambahan <span class="opt">(opsional, maks 1)</span></label>
+      {% if cv_files %}
+      <select name="doc_file" class="field">
+        <option value="">— Tidak ada —</option>
+        {% for f in cv_files %}
+        <option value="{{ f }}" {% if request.query_params.get('doc_file') == f %}selected{% endif %}>{{ f }}</option>
+        {% endfor %}
+      </select>
+      <p class="muted" style="font-size: 0.72rem; margin-top: 4px;">File PDF lain di folder CV (mis. portofolio, sertifikat, surat rekomendasi), dikirim bersama CV di setiap email batch.</p>
+      {% else %}
+      <p class="muted" style="font-size: 0.88rem;">Tidak ada PDF. <a href="/cv">Upload CV</a> dulu.</p>
+      {% endif %}
     </div>
     <div>
       <label class="field-label">Desain Email</label>

@@ -28,6 +28,10 @@
       <p>{{ preview.cv_file }}</p>
     </div>
     <div>
+      <div class="card-label">Dokumen Tambahan</div>
+      <p>{% if preview.doc_file %}{{ preview.doc_file }}{% else %}<span class="muted">—</span>{% endif %}</p>
+    </div>
+    <div>
       <div class="card-label">Akun Tersedia</div>
       <div>
         {% for acct in smtp_accounts %}
@@ -137,6 +141,7 @@
       <input type="hidden" name="position" value="{{ preview.position }}">
       <input type="hidden" name="extra" value="{{ preview.extra }}">
       <input type="hidden" name="cv_file" value="{{ preview.cv_file }}">
+      <input type="hidden" name="doc_file" value="{{ preview.doc_file }}">
       <input type="hidden" name="template_name" value="{{ preview.template_name }}">
       <input type="hidden" name="experience" value="{{ preview.experience }}">
       <input type="hidden" name="sender_name" value="{{ preview.sender_name }}">
@@ -183,6 +188,16 @@
       {% else %}
       <p style="color: var(--destructive); font-size: 0.88rem; padding: 10px 0;">Tidak ada PDF. <a href="/cv">Upload CV</a></p>
       {% endif %}
+    </div>
+    <div>
+      <label class="field-label">Dokumen Tambahan <span class="opt">(opsional, maks 1)</span></label>
+      <select name="doc_file" class="field">
+        <option value="">— Tidak ada —</option>
+        {% for f in cv_files %}
+        <option value="{{ f }}" {% if request.query_params.get('doc_file') == f %}selected{% endif %}>{{ f }}</option>
+        {% endfor %}
+      </select>
+      <p class="muted" style="font-size: 0.72rem; margin-top: 4px;">File PDF lain di folder CV (mis. portofolio, sertifikat, surat rekomendasi). Kirim <strong>1 dokumen</strong> tambahan di luar CV.</p>
     </div>
   </div>
     <div>

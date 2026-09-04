@@ -128,6 +128,7 @@ def _try_send_with_failover(
     template_name: str = "html",
     experience: Optional[str] = None,
     sender_name: Optional[str] = None,
+    doc_path: Optional[str] = None,
 ) -> tuple[bool, str, str]:
     if not SMTP_ACCOUNTS:
         raise RuntimeError("No SMTP accounts configured")
@@ -163,6 +164,7 @@ def _try_send_with_failover(
                     template_name=template_name,
                     experience=experience,
                     sender_name=sender_name,
+                    additional_attachments=[doc_path] if doc_path else None,
                 )
                 send_email(msg, acct.host, acct.port, acct.user, acct.password, use_ssl=acct.use_ssl)
                 db.use_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
@@ -536,6 +538,7 @@ def api_preview_html(
     template_name: str = Form("html"),
     experience: str = Form(""),
     sender_name: str = Form(""),
+    doc_file: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -562,6 +565,7 @@ def preview(
     template_name: str = Form("html"),
     experience: str = Form(""),
     sender_name: str = Form(""),
+    doc_file: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -570,6 +574,7 @@ def preview(
     experience = _trim(experience)
     sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
+    doc_file = _trim(doc_file)
     if not cv_file:
         return RedirectResponse(url="/?message=Pilih+file+CV+untuk+preview&msg_type=error", status_code=303)
     try:
@@ -595,6 +600,7 @@ def preview(
                 "template_name": template_name,
                 "experience": experience,
                 "sender_name": sender_name,
+                "doc_file": doc_file,
                 "body": body,
                 "html_body": html_body,
             },
@@ -612,6 +618,7 @@ def send_single(
     template_name: str = Form("html"),
     experience: str = Form(""),
     sender_name: str = Form(""),
+    doc_file: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -620,6 +627,7 @@ def send_single(
     experience = _trim(experience)
     sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
+    doc_file = _trim(doc_file)
 
     if not cv_file:
         return RedirectResponse(url="/?message=Pilih+file+CV+dulu&msg_type=error", status_code=303)
@@ -645,6 +653,16 @@ def send_single(
         )
     cv_path = str(CV_DIR / safe_cv)
 
+    doc_path = None
+    if doc_file:
+        try:
+            doc_path = str(CV_DIR / _sanitize_filename(doc_file))
+        except ValueError:
+            return RedirectResponse(
+                url="/?message=Nama+file+dokumen+tambahan+tidak+valid&msg_type=error",
+                status_code=303,
+            )
+
     if not SMTP_OK:
         db.log_email(to, company, position, extra, safe_cv, "failed", "SMTP not configured")
         return RedirectResponse(
@@ -656,6 +674,7 @@ def send_single(
         success, key, err = _try_send_with_failover(
             to, company, position, extra, cv_path,
             template_name=template_name, experience=experience, sender_name=sender_name,
+            doc_path=doc_path,
         )
         if success:
             db.log_email(to, company, position, extra, safe_cv, "sent", smtp_account=key)
@@ -757,6 +776,7 @@ async def batch_preview(
     position: str = Form("IT Support / DevOps"),
     extra: str = Form(""),
     template_name: str = Form("html"),
+    doc_file: str = Form(""),
 ):
     cv_file = _trim(cv_file)
     if not cv_file:
@@ -824,6 +844,7 @@ async def batch_preview(
     _batch_csv_cache[cache_key] = {
         "rows": rows,
         "cv_file": cv_file,
+        "doc_file": _trim(doc_file),
         "position": position,
         "extra": extra,
         "template_name": template_name,
@@ -845,6 +866,7 @@ async def batch_preview(
             filename=file.filename,
             position=position,
             cv_file=cv_file,
+            doc_file=_trim(doc_file),
             template_name=template_name,
         ),
     )
@@ -864,6 +886,7 @@ def batch_send(
 
     rows: list[dict[str, Any]] = data["rows"]
     cv_file: str = data["cv_file"]
+    doc_file: str = data.get("doc_file", "")
     position: str = data["position"]
     extra: str = data["extra"]
     template_name: str = data.get("template_name", "html")
@@ -877,6 +900,16 @@ def batch_send(
             status_code=303,
         )
     cv_path = str(CV_DIR / safe_cv)
+
+    doc_path = None
+    if doc_file:
+        try:
+            doc_path = str(CV_DIR / _sanitize_filename(doc_file))
+        except ValueError:
+            return RedirectResponse(
+                url="/batch?message=Nama+file+dokumen+tambahan+tidak+valid&msg_type=error",
+                status_code=303,
+            )
 
     if not SMTP_OK:
         return RedirectResponse(
@@ -902,6 +935,7 @@ def batch_send(
         "extra": extra,
         "safe_cv": safe_cv,
         "cv_path": cv_path,
+        "doc_path": doc_path,
         "template_name": template_name,
     })
     job_id = db.create_batch_job(total, filename=filename, scheduled_at=sched_epoch, payload=payload)
@@ -930,6 +964,7 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
     extra: str = data["extra"]
     safe_cv: str = data["safe_cv"]
     cv_path: str = data["cv_path"]
+    doc_path: Optional[str] = data.get("doc_path")
     total = len(rows)
 
     # Resume-aware: mulai dari counter yang tersimpan (jika batch pernah
@@ -1012,6 +1047,7 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
                     email_val, company_val, position, extra, cv_path,
                     template_name=tpl_name,
                     experience=row_experience, sender_name=row_sender,
+                    doc_path=doc_path,
                 )
             except FileNotFoundError as e:
                 results["failed"] += 1

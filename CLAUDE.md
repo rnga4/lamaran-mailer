@@ -149,6 +149,14 @@ docker compose up --build -d
 - Folder `cv/` (mounted volume), wajib PDF; auto-detect & daftar di UI
 - Anti path-traversal: `_sanitize_filename()` + cek `path.parent.resolve() == CV_DIR`
 
+## Dokumen Tambahan (opsional, maks 1)
+
+- Kirim tunggal & batch punya dropdown **"Dokumen Tambahan"** (PDF lain di folder `cv/`, mis. portofolio/sertifikat/surat rekomendasi), dikirim **bersama CV**, maks **1**
+- Kirim tunggal: field `doc_file` di form `/` + `/preview` + `/send`
+- Batch: field `doc_file` di `/batch` → simpan `doc_path` di `batch_jobs.payload` (tahan restart); `_run_batch` teruskan ke `_try_send_with_failover` → `build_email(additional_attachments=[doc_path])`
+- `_try_send_with_failover(...)` param baru `doc_path`; `build_email` sudah lama dukung `additional_attachments` (list path, PDF/MIMEBase)
+- Kalau kosong → hanya CV yang terpasang (backward compatible)
+
 ## Dev Workflow
 
 ```bash
@@ -190,13 +198,14 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 - Git: sudah push ke `origin/main` (branch main sudah track upstream)
 
 ### Yang sudah dikerjakan di sesi terakhir
-0. **Override Nama Perkenalan & Pengalaman di Kirim Tunggal** — form Kirim tunggal kini punya 2 field opsional `sender_name` & `experience`. Variabel `{experience}` baru (default `EXPERIENCE_DEFAULT`) menggantikan paragraf pengalaman hardcoded di `BODY_TEMPLATE` + 4 desain HTML. `sender_name` ikut mengganti paragraf pembuka `{opening}` (fix: variants dibangun dengan `sender_name` biar opening gak stale). Mengalir lewat `/preview`, `/api/preview-html`, `/send`, `_try_send_with_failover`, `build_email`; HTML di-`html.escape()`. Backward compatible: kosong → default; template kustom tanpa `{experience}` aman.
-1. **Kolom CSV opsional `sender_name` & `experience` per-baris** — batch CSV dukung kolom opsional `sender_name` (override nama) dan `experience` (override pengalaman) per baris. Kosong → pakai nilai umum/default. Data tersimpan di `batch_jobs.payload` JSON (tahan restart); contoh CSV updated.
-2. **Fix bug: plain text template kustom tidak terpakai** — `render_body`/`build_email`/rute `/preview` sebelumnya hardcode `"plain"` → cuma nyari template bernama `"plain"` (tak pernah ada) → selalu fallback ke `BODY_TEMPLATE`. Solusi: tambah param `plain: bool` di `render_body()`; `build_email()` & `/preview` kini render plain text via `render_body(..., template_name, plain=True)` → pakai `template_data["body"]` dari template kustom yang dipilih; fallback `BODY_TEMPLATE` kalau template kustom tak ada (backward compatible)
-3. **Plain text auto-generate** — `app.py` tambah `_plain_to_html()` (baris baru → `<br>`/`</p>`, escape entity); `save_template()` jadikan field `html_body` opsional, auto-generate dari plain text kalau dikosongkan
-4. **Simpla UI editor template** — `/templates-editor` jadi 1 kotak utama "Isi Email" (**plain text**), HTML di-<details> "Mode HTML" opsional, panduan 4 langkah, panel tombol variabel klik-sisip (label manusiawi + `data-insert` dalam `<template>`), form template baru sudah ada contoh isi
-5. **Fix attachment PDF korup (base64)** — (sesi sebelumnya) pastikan nggak hilang dari konteks
-6. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
+0. **Dokumen Tambahan (maks 1) di Kirim Tunggal & Batch** — dropdown opsional `doc_file` di form `/` dan `/batch` (PDF lain di folder `cv/`, mis. portofolio/sertifikat), dikirim **bersama CV**. Kirim tunggal: field `doc_file` → `/preview` + `/send` → `_try_send_with_failover(doc_path)` → `build_email(additional_attachments=[...])`. Batch: `doc_file` di `/batch/preview` → simpan `doc_path` di `batch_jobs.payload` (tahan restart) → `_run_batch` → `_try_send_with_failover`. Kosong → hanya CV (backward compatible). Terverifikasi: MIME berisi CV+doc saat ada doc, cuma CV kalau tidak; contoh CSV/download tetap jalan.
+1. **Override Nama Perkenalan & Pengalaman di Kirim Tunggal** — form Kirim tunggal kini punya 2 field opsional `sender_name` & `experience`. Variabel `{experience}` baru (default `EXPERIENCE_DEFAULT`) menggantikan paragraf pengalaman hardcoded di `BODY_TEMPLATE` + 4 desain HTML. `sender_name` ikut mengganti paragraf pembuka `{opening}` (fix: variants dibangun dengan `sender_name` biar opening gak stale). Mengalir lewat `/preview`, `/api/preview-html`, `/send`, `_try_send_with_failover`, `build_email`; HTML di-`html.escape()`. Backward compatible: kosong → default; template kustom tanpa `{experience}` aman.
+2. **Kolom CSV opsional `sender_name` & `experience` per-baris** — batch CSV dukung kolom opsional `sender_name` (override nama) dan `experience` (override pengalaman) per baris. Kosong → pakai nilai umum/default. Data tersimpan di `batch_jobs.payload` JSON (tahan restart); contoh CSV updated.
+3. **Fix bug: plain text template kustom tidak terpakai** — `render_body`/`build_email`/rute `/preview` sebelumnya hardcode `"plain"` → cuma nyari template bernama `"plain"` (tak pernah ada) → selalu fallback ke `BODY_TEMPLATE`. Solusi: tambah param `plain: bool` di `render_body()`; `build_email()` & `/preview` kini render plain text via `render_body(..., template_name, plain=True)` → pakai `template_data["body"]` dari template kustom yang dipilih; fallback `BODY_TEMPLATE` kalau template kustom tak ada (backward compatible)
+4. **Plain text auto-generate** — `app.py` tambah `_plain_to_html()` (baris baru → `<br>`/`</p>`, escape entity); `save_template()` jadikan field `html_body` opsional, auto-generate dari plain text kalau dikosongkan
+5. **Simpla UI editor template** — `/templates-editor` jadi 1 kotak utama "Isi Email" (**plain text**), HTML di-<details> "Mode HTML" opsional, panduan 4 langkah, panel tombol variabel klik-sisip (label manusiawi + `data-insert` dalam `<template>`), form template baru sudah ada contoh isi
+6. **Fix attachment PDF korup (base64)** — (sesi sebelumnya) pastikan nggak hilang dari konteks
+7. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
 
 ### Ide fitur yang belum dikerjakan (kandidat berikutnya)
 - **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari (hook-nya sudah ada: kolom `stage` + `stage_updated_at`)

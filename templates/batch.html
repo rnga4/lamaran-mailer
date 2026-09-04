@@ -397,6 +397,7 @@
     <a href="/batch/example-csv" download class="btn btn-sm btn-ghost">Download Contoh CSV</a>
   </div>
   <p class="muted" style="font-size: 0.88rem; margin-top: 14px;">Kolom: <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">email</code> dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">company</code> (atau <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">nama_pt</code>).</p>
+  <p class="muted" style="font-size: 0.88rem; margin-top: 6px;">Opsional per-baris (boleh kosong): <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_name</code> (ganti nama perkenalan &amp; tanda tangan) dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">experience</code> (ganti paragraf pengalaman/keahlian). Kalau kosong, pakai nilai umum.</p>
 </div>
 
 <div class="card">
@@ -522,7 +523,16 @@
         <tr>
           <td class="muted">{{ r.row }}</td>
           <td>{{ r.email }}</td>
-          <td>{{ r.company }}</td>
+          <td>
+            {{ r.company }}
+            {% if r.sender_name or r.experience %}
+            <span class="muted" style="display:block;font-size:0.75rem;margin-top:2px;">
+              {% if r.sender_name %}Pengirim: {{ r.sender_name }}{% endif %}
+              {% if r.sender_name and r.experience %} • {% endif %}
+              {% if r.experience %}Pengalaman: {{ r.experience|truncate(40) }}{% endif %}
+            </span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

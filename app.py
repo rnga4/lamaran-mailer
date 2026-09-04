@@ -738,9 +738,9 @@ async def batch_preview_redirect():
 @app.get("/batch/example-csv")
 def batch_example_csv():
     content = (
-        "email,company\n"
-        "hrd@ptcontoh.co.id,PT Contoh Sejahtera\n"
-        "career@cvcontoh.com,CV Maju Jaya\n"
+        "email,company,sender_name,experience\n"
+        "hrd@ptcontoh.co.id,PT Contoh Sejahtera,Rangga,IT Support dengan 4 tahun pengalaman jaringan\n"
+        "career@cvcontoh.com,CV Maju Jaya,,\n"
     )
     return StreamingResponse(
         io.BytesIO(content.encode("utf-8-sig")),
@@ -799,7 +799,13 @@ async def batch_preview(
         if db.check_duplicate_email(email_val, company_val):
             prev_sent_rows.append({"email": email_val, "company": company_val, "row": i})
             continue
-        rows.append({"email": email_val, "company": company_val, "row": i})
+        rows.append({
+            "email": email_val,
+            "company": company_val,
+            "sender_name": _row_field(row, header_map, "sender_name").strip() or None,
+            "experience": _row_field(row, header_map, "experience").strip() or None,
+            "row": i,
+        })
 
     if not rows:
         if prev_sent_rows:
@@ -998,9 +1004,15 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
 
             email_val = row["email"]
             company_val = row["company"]
+            row_sender = row.get("sender_name") or None
+            row_experience = row.get("experience") or None
 
             try:
-                success, key, err = _try_send_with_failover(email_val, company_val, position, extra, cv_path, template_name=tpl_name)
+                success, key, err = _try_send_with_failover(
+                    email_val, company_val, position, extra, cv_path,
+                    template_name=tpl_name,
+                    experience=row_experience, sender_name=row_sender,
+                )
             except FileNotFoundError as e:
                 results["failed"] += 1
                 last_error = str(e)

@@ -49,16 +49,17 @@ docker compose up --build -d
 - **`{experience}` (paragraf "Pengalaman & Keahlian")**: punya nilai default (`EXPERIENCE_DEFAULT` di `email_service.py`); dipakai ulang di `BODY_TEMPLATE` + 4 desain HTML; kosong di form → pakai default. Template kustom yang tidak punya `{experience}` tetap aman (kwarg ekstra diabaikan `str.format`)
 - Kontak pengirim dari env: `SENDER_PHONE` (**`wa.me` otomatis normalisasi 0→62**, mis. `0822…` → `wa.me/62822…`), `SENDER_LINKEDIN`, `SENDER_GITHUB`
 
-### Kirim Tunggal — Override Nama & Pengalaman (per-kirim)
-- Form **Kirim tunggal** punya 2 field opsional: **Nama Perkenalan / Pengirim** (`sender_name`) & **Pengalaman & Keahlian** (`experience`)
+### Kirim Tunggal — Override Nama, Pengalaman & Kontak (per-kirim)
+- Form **Kirim tunggal** punya field opsional: **Nama Perkenalan / Pengirim** (`sender_name`), **Pengalaman & Keahlian** (`experience`), dan **Kontak Custom** (4 field tersembunyi di `<details>`: `sender_phone`, `sender_email`, `sender_linkedin`, `sender_github`)
 - `sender_name` menggantikan nama di badan email (paragraf pembuka `{opening}` **dan** tanda tangan `{sender_name}`); kosong → pakai `SMTP_FROM_NAME` dari env
 - `experience` menggantikan paragraf pengalaman (variable `{experience}`); kosong → pakai `EXPERIENCE_DEFAULT`
+- `sender_phone`/`sender_email`/`sender_linkedin`/`sender_github` mengganti kontak di tombol email & footer; kosong → pakai nilai dari env (`SENDER_PHONE`, `SMTP_FROM`, `SENDER_LINKEDIN`, `SENDER_GITHUB`)
 - Mengalir lewat `/preview`, `/api/preview-html`, `/send`, `_try_send_with_failover`, `build_email`; hidden field diteruskan di form "Kirim Sekarang"
-- Versi HTML di-`html.escape()` (anti-injeksi); tetap tampil konsisten di plain + HTML karena `build_email` render keduanya dari `variants` yang sama
+- **Anti-injeksi**: semua nilai dari pengguna (kontak custom, `sender_name`, `company`, `position`, `experience`, `extra`, plus `greeting/opening/closing` yang menampung `company`/`sender_name`, dan `linkedin_url`/`github_url` turunan) di-`html.escape()` di versi HTML — escape dilakukan di `render_body()` saat `plain=False`, dict variants **disalin** supaya pemanggil yang render plain dulu (mis. `build_email`) tidak ikut dapat versi ter-escape. Versi plain tetap mentah.
 
 ### Batch Sending
 - CSV kolom `email` + `company` (atau `nama_pt`); upload preview → validasi (duplikat, sudah pernah dikirim, email invalid) → `POST /batch/send`
-- **Kolom opsional per-baris**: `sender_name` (override nama perkenalan & tanda tangan) dan `experience` (override paragraf pengalaman/keahlian). Kosong → pakai nilai default/umum. Disimpan di `batch_jobs.payload` JSON, tahan restart.
+- **Kolom opsional per-baris**: `sender_name` (override nama perkenalan & tanda tangan), `experience` (override paragraf pengalaman/keahlian), `sender_phone`/`sender_email`/`sender_linkedin`/`sender_github` (custom kontak di tombol email & footer). Kosong → pakai nilai default/umum. Disimpan di `batch_jobs.payload` JSON, tahan restart.
 - **Payload tersimpan di DB** (`batch_jobs.payload`) — batch bisa dilanjutkan setelah container restart; retry 1-klik (email yang sudah terkirim dilewati otomatis)
 - **Resume-aware**: `_run_batch` mulai dari counter tersimpan, cek cancel/pause tiap iterasi
 - Progress via SSE `/api/batch-progress/{job_id}/stream`; status: `queued → running → paused/done/cancelled/failed`
@@ -186,7 +187,7 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 
 ## Catatan Sesi Terakhir
 
-> Diperbarui: **4 September 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
+> Diperbarui: **5 September 2026**. Ini "memory" agar kerja bisa dilanjutkan besok tanpa kehilangan konteks.
 
 ### Status saat ini
 - Container **berjalan** di `http://localhost:8086` (sudah rebuilt)
@@ -206,6 +207,9 @@ print(es.render_body('PT X','IT Support / DevOps','', 'dark', variants=v)[:200])
 5. **Simpla UI editor template** — `/templates-editor` jadi 1 kotak utama "Isi Email" (**plain text**), HTML di-<details> "Mode HTML" opsional, panduan 4 langkah, panel tombol variabel klik-sisip (label manusiawi + `data-insert` dalam `<template>`), form template baru sudah ada contoh isi
 6. **Fix attachment PDF korup (base64)** — (sesi sebelumnya) pastikan nggak hilang dari konteks
 7. (sebelumnya, sesi lalu) **Tracker Lamaran (Kanban)**, **4 desain email**, kontak asli `.env` + fix `wa.me/0822…` → `wa.me/62822…`, fitur Jam Kerja, perbaikan bug (cancel batch, preview batch, render_body variants, dll)
+8. **Custom Kontak (tombol WA/Email/LinkedIn/GitHub) per-kirim & per-baris CSV** — 4 field opsional di form Kirim tunggal (`sender_phone`, `sender_email`, `sender_linkedin`, `sender_github`) di dalam `<details>`, 4 kolom CSV opsional per-baris di batch. Kosong → pakai nilai dari `.env`. Mengalir lewat `_build_default_variants()`, `build_variants()`, `render_body()`, `build_email()`, `_try_send_with_failover()`, batch `_run_batch()`. Contoh CSV updated.
+9. **Fix anti-injeksi HTML menyeluruh di `render_body()`** — sebelumnya hanya `experience` & `extra` yang di-escape; kontak custom baru (juga `sender_name`, `company`, `position`, `opening`/`greeting`/`closing`, `linkedin_url`/`github_url`) bisa memecah atribut `href` / menyisipkan tag (XSS di iframe preview + injeksi HTML di email). Sekarang saat `plain=False` SEMUA nilai pengguna + variants turunannya di-`html.escape()` (dict disalin agar pemanggil yang render plain dulu tidak kena). Plus fix `linkedin_url` yang dulunya hardcoded ke URL trycloudflare (bukan turunan `sender_linkedin`).
+10. **Fix double-encode & JS-break di switch desain** — `switchPreviewDesign` dulu menyisipkan preview ke string JS pakai `| e` (5 dari 11 field adalah kontak custom baru). Nilai mengandung `&` jadi double-encode (`&amp;` menular ke href), nilai mengandung `'` memecah string JS → fetch preview gagal. Ganti ke `{{ preview.X | default('') | tojson }}` (aman, `\uXXXX`) untuk semua field; `template_name` tetap variabel JS `tpl` (jangan `| tojson` — bukan variabel Jinja).
 
 ### Ide fitur yang belum dikerjakan (kandidat berikutnya)
 - **Follow-up otomatis** — kirim susulan ke email yang belum dibalas setelah N hari (hook-nya sudah ada: kolom `stage` + `stage_updated_at`)

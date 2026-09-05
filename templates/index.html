@@ -78,14 +78,18 @@
       if (h) h.value = tpl;
       // Fetch HTML baru
       var fd = new FormData();
-      fd.append('to', '{{ preview.to | e }}');
-      fd.append('company', '{{ preview.company | e }}');
-      fd.append('position', '{{ preview.position | e }}');
-      fd.append('extra', '{{ preview.extra | e }}');
-      fd.append('cv_file', '{{ preview.cv_file | e }}');
+      fd.append('to', {{ preview.to | default('') | tojson }});
+      fd.append('company', {{ preview.company | default('') | tojson }});
+      fd.append('position', {{ preview.position | default('') | tojson }});
+      fd.append('extra', {{ preview.extra | default('') | tojson }});
+      fd.append('cv_file', {{ preview.cv_file | default('') | tojson }});
       fd.append('template_name', tpl);
-      fd.append('experience', '{{ preview.experience | e }}');
-      fd.append('sender_name', '{{ preview.sender_name | e }}');
+      fd.append('experience', {{ preview.experience | default('') | tojson }});
+      fd.append('sender_name', {{ preview.sender_name | default('') | tojson }});
+      fd.append('sender_phone', {{ preview.sender_phone | default('') | tojson }});
+      fd.append('sender_email', {{ preview.sender_email | default('') | tojson }});
+      fd.append('sender_linkedin', {{ preview.sender_linkedin | default('') | tojson }});
+      fd.append('sender_github', {{ preview.sender_github | default('') | tojson }});
       fetch('/api/preview-html', { method: 'POST', body: fd })
         .then(function(r) { return r.text(); })
         .then(function(html) {
@@ -145,6 +149,10 @@
       <input type="hidden" name="template_name" value="{{ preview.template_name }}">
       <input type="hidden" name="experience" value="{{ preview.experience }}">
       <input type="hidden" name="sender_name" value="{{ preview.sender_name }}">
+      <input type="hidden" name="sender_phone" value="{{ preview.sender_phone }}">
+      <input type="hidden" name="sender_email" value="{{ preview.sender_email }}">
+      <input type="hidden" name="sender_linkedin" value="{{ preview.sender_linkedin }}">
+      <input type="hidden" name="sender_github" value="{{ preview.sender_github }}">
       <button type="submit" class="btn btn-block">Kirim Sekarang</button>
     </form>
     <a href="/" class="btn btn-ghost" style="flex: 1; min-width: 220px;">Kembali</a>
@@ -216,6 +224,31 @@
       <label class="field-label">Pengalaman &amp; Keahlian <span class="opt">(opsional)</span></label>
       <textarea name="experience" rows="4" placeholder="Kosongkan untuk pakai pengalaman default dari template..." class="field">{{ request.query_params.get('experience', '') }}</textarea>
     </div>
+    <details style="margin-top: -6px;">
+      <summary class="field-label" style="cursor: pointer; user-select: none;">Kontak Custom <span class="opt">(opsional — kosongkan = pakai .env)</span></summary>
+      <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 12px;">
+        <div class="grid2">
+          <div>
+            <label class="field-label" style="font-size: 0.78rem;">No. WhatsApp</label>
+            <input type="text" name="sender_phone" value="{{ request.query_params.get('sender_phone', '') }}" placeholder="0822XXXXXXXX" class="field">
+          </div>
+          <div>
+            <label class="field-label" style="font-size: 0.78rem;">Email</label>
+            <input type="email" name="sender_email" value="{{ request.query_params.get('sender_email', '') }}" placeholder="email@domain.com" class="field">
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="field-label" style="font-size: 0.78rem;">LinkedIn</label>
+            <input type="text" name="sender_linkedin" value="{{ request.query_params.get('sender_linkedin', '') }}" placeholder="linkedin.com/in/username" class="field">
+          </div>
+          <div>
+            <label class="field-label" style="font-size: 0.78rem;">GitHub</label>
+            <input type="text" name="sender_github" value="{{ request.query_params.get('sender_github', '') }}" placeholder="github.com/username" class="field">
+          </div>
+        </div>
+      </div>
+    </details>
     <div>
       <label class="field-label">Kalimat Tambahan <span class="opt">(opsional)</span></label>
       <textarea name="extra" rows="2" placeholder="Skill atau pengalaman spesifik sesuai lowongan..." class="field">{{ request.query_params.get('extra', '') }}</textarea>

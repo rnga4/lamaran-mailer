@@ -397,7 +397,7 @@
     <a href="/batch/example-csv" download class="btn btn-sm btn-ghost">Download Contoh CSV</a>
   </div>
   <p class="muted" style="font-size: 0.88rem; margin-top: 14px;">Kolom: <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">email</code> dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">company</code> (atau <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">nama_pt</code>).</p>
-  <p class="muted" style="font-size: 0.88rem; margin-top: 6px;">Opsional per-baris (boleh kosong): <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_name</code> (ganti nama perkenalan &amp; tanda tangan) dan <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">experience</code> (ganti paragraf pengalaman/keahlian). Kalau kosong, pakai nilai umum.</p>
+  <p class="muted" style="font-size: 0.88rem; margin-top: 6px;">Opsional per-baris (boleh kosong): <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_name</code> (ganti nama perkenalan &amp; tanda tangan), <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">experience</code> (ganti paragraf pengalaman/keahlian), <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_phone</code>, <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_email</code>, <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_linkedin</code>, <code style="background: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-family: var(--font-mono);">sender_github</code> (custom kontak di tombol email). Kalau kosong, pakai nilai dari .env.</p>
 </div>
 
 <div class="card">
@@ -531,11 +531,19 @@
           <td>{{ r.email }}</td>
           <td>
             {{ r.company }}
-            {% if r.sender_name or r.experience %}
+            {% if r.sender_name or r.experience or r.sender_phone or r.sender_email or r.sender_linkedin or r.sender_github %}
             <span class="muted" style="display:block;font-size:0.75rem;margin-top:2px;">
               {% if r.sender_name %}Pengirim: {{ r.sender_name }}{% endif %}
               {% if r.sender_name and r.experience %} • {% endif %}
               {% if r.experience %}Pengalaman: {{ r.experience|truncate(40) }}{% endif %}
+              {% if (r.sender_name or r.experience) and (r.sender_phone or r.sender_email or r.sender_linkedin or r.sender_github) %}<br>{% endif %}
+              {% if r.sender_phone %}WA: {{ r.sender_phone }}{% endif %}
+              {% if r.sender_phone and r.sender_email %} • {% endif %}
+              {% if r.sender_email %}Email: {{ r.sender_email }}{% endif %}
+              {% if (r.sender_phone or r.sender_email) and r.sender_linkedin %}<br>{% endif %}
+              {% if r.sender_linkedin %}LinkedIn: {{ r.sender_linkedin }}{% endif %}
+              {% if r.sender_linkedin and r.sender_github %} • {% endif %}
+              {% if r.sender_github %}GitHub: {{ r.sender_github }}{% endif %}
             </span>
             {% endif %}
           </td>

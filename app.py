@@ -129,6 +129,10 @@ def _try_send_with_failover(
     experience: Optional[str] = None,
     sender_name: Optional[str] = None,
     doc_path: Optional[str] = None,
+    sender_phone: Optional[str] = None,
+    sender_email: Optional[str] = None,
+    sender_linkedin: Optional[str] = None,
+    sender_github: Optional[str] = None,
 ) -> tuple[bool, str, str]:
     if not SMTP_ACCOUNTS:
         raise RuntimeError("No SMTP accounts configured")
@@ -165,6 +169,10 @@ def _try_send_with_failover(
                     experience=experience,
                     sender_name=sender_name,
                     additional_attachments=[doc_path] if doc_path else None,
+                    sender_phone=sender_phone,
+                    sender_email=sender_email,
+                    sender_linkedin=sender_linkedin,
+                    sender_github=sender_github,
                 )
                 send_email(msg, acct.host, acct.port, acct.user, acct.password, use_ssl=acct.use_ssl)
                 db.use_rate_limit(acct.key, RATE_LIMIT_PER_HOUR)
@@ -539,6 +547,10 @@ def api_preview_html(
     experience: str = Form(""),
     sender_name: str = Form(""),
     doc_file: str = Form(""),
+    sender_phone: str = Form(""),
+    sender_email: str = Form(""),
+    sender_linkedin: str = Form(""),
+    sender_github: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -546,9 +558,13 @@ def api_preview_html(
     extra = _trim(extra)
     experience = _trim(experience)
     sender_name = _trim(sender_name)
+    sender_phone = _trim(sender_phone)
+    sender_email = _trim(sender_email)
+    sender_linkedin = _trim(sender_linkedin)
+    sender_github = _trim(sender_github)
     try:
-        variants = build_variants(company, position, sender_name=sender_name)
-        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
+        variants = build_variants(company, position, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
+        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
     except (ValueError, KeyError) as e:
         html_body = f"Error: {e}"
     return HTMLResponse(content=html_body)
@@ -566,6 +582,10 @@ def preview(
     experience: str = Form(""),
     sender_name: str = Form(""),
     doc_file: str = Form(""),
+    sender_phone: str = Form(""),
+    sender_email: str = Form(""),
+    sender_linkedin: str = Form(""),
+    sender_github: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -575,12 +595,16 @@ def preview(
     sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
     doc_file = _trim(doc_file)
+    sender_phone = _trim(sender_phone)
+    sender_email = _trim(sender_email)
+    sender_linkedin = _trim(sender_linkedin)
+    sender_github = _trim(sender_github)
     if not cv_file:
         return RedirectResponse(url="/?message=Pilih+file+CV+untuk+preview&msg_type=error", status_code=303)
     try:
-        variants = build_variants(company, position, sender_name=sender_name)
-        body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name)
-        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
+        variants = build_variants(company, position, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
+        body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
+        html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
     except (ValueError, KeyError) as e:
         body = f"Error: {e}"
         html_body = f"Error: {e}"
@@ -603,6 +627,10 @@ def preview(
                 "doc_file": doc_file,
                 "body": body,
                 "html_body": html_body,
+                "sender_phone": sender_phone,
+                "sender_email": sender_email,
+                "sender_linkedin": sender_linkedin,
+                "sender_github": sender_github,
             },
         ),
     )
@@ -619,6 +647,10 @@ def send_single(
     experience: str = Form(""),
     sender_name: str = Form(""),
     doc_file: str = Form(""),
+    sender_phone: str = Form(""),
+    sender_email: str = Form(""),
+    sender_linkedin: str = Form(""),
+    sender_github: str = Form(""),
 ):
     to = _trim(to)
     company = _trim(company)
@@ -628,6 +660,10 @@ def send_single(
     sender_name = _trim(sender_name)
     cv_file = _trim(cv_file)
     doc_file = _trim(doc_file)
+    sender_phone = _trim(sender_phone)
+    sender_email = _trim(sender_email)
+    sender_linkedin = _trim(sender_linkedin)
+    sender_github = _trim(sender_github)
 
     if not cv_file:
         return RedirectResponse(url="/?message=Pilih+file+CV+dulu&msg_type=error", status_code=303)
@@ -675,6 +711,8 @@ def send_single(
             to, company, position, extra, cv_path,
             template_name=template_name, experience=experience, sender_name=sender_name,
             doc_path=doc_path,
+            sender_phone=sender_phone, sender_email=sender_email,
+            sender_linkedin=sender_linkedin, sender_github=sender_github,
         )
         if success:
             db.log_email(to, company, position, extra, safe_cv, "sent", smtp_account=key)
@@ -757,9 +795,9 @@ async def batch_preview_redirect():
 @app.get("/batch/example-csv")
 def batch_example_csv():
     content = (
-        "email,company,sender_name,experience\n"
-        "hrd@ptcontoh.co.id,PT Contoh Sejahtera,Rangga,IT Support dengan 4 tahun pengalaman jaringan\n"
-        "career@cvcontoh.com,CV Maju Jaya,,\n"
+        "email,company,sender_name,experience,sender_phone,sender_email,sender_linkedin,sender_github\n"
+        "hrd@ptcontoh.co.id,PT Contoh Sejahtera,Rangga,IT Support dengan 4 tahun pengalaman jaringan,082212345678,custom@gmail.com,linkedin.com/in/custom,github.com/custom\n"
+        "career@cvcontoh.com,CV Maju Jaya,,,,,\n"
     )
     return StreamingResponse(
         io.BytesIO(content.encode("utf-8-sig")),
@@ -824,6 +862,10 @@ async def batch_preview(
             "company": company_val,
             "sender_name": _row_field(row, header_map, "sender_name").strip() or None,
             "experience": _row_field(row, header_map, "experience").strip() or None,
+            "sender_phone": _row_field(row, header_map, "sender_phone").strip() or None,
+            "sender_email": _row_field(row, header_map, "sender_email").strip() or None,
+            "sender_linkedin": _row_field(row, header_map, "sender_linkedin").strip() or None,
+            "sender_github": _row_field(row, header_map, "sender_github").strip() or None,
             "row": i,
         })
 
@@ -1041,6 +1083,10 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
             company_val = row["company"]
             row_sender = row.get("sender_name") or None
             row_experience = row.get("experience") or None
+            row_phone = row.get("sender_phone") or None
+            row_email = row.get("sender_email") or None
+            row_linkedin = row.get("sender_linkedin") or None
+            row_github = row.get("sender_github") or None
 
             try:
                 success, key, err = _try_send_with_failover(
@@ -1048,6 +1094,8 @@ def _run_batch(job_id: int, data: dict[str, Any]) -> None:
                     template_name=tpl_name,
                     experience=row_experience, sender_name=row_sender,
                     doc_path=doc_path,
+                    sender_phone=row_phone, sender_email=row_email,
+                    sender_linkedin=row_linkedin, sender_github=row_github,
                 )
             except FileNotFoundError as e:
                 results["failed"] += 1

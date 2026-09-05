@@ -420,7 +420,13 @@ def set_template(name: str, content: str) -> None:
 
 
 def _build_default_variants(
-    company: str, position: str, sender_name: Optional[str] = None
+    company: str,
+    position: str,
+    sender_name: Optional[str] = None,
+    sender_phone: Optional[str] = None,
+    sender_email: Optional[str] = None,
+    sender_linkedin: Optional[str] = None,
+    sender_github: Optional[str] = None,
 ) -> dict[str, str]:
     """Satu set greeting/opening/closing acak + data pengirim.
 
@@ -429,17 +435,21 @@ def _build_default_variants(
     """
     if not sender_name:
         sender_name = os.environ.get("SMTP_FROM_NAME", "Nama Anda")
-    sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
-    sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
-    sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
-    sender_github = os.environ.get("SENDER_GITHUB", "github.com/username")
+    if not sender_phone:
+        sender_phone = os.environ.get("SENDER_PHONE", "08XX-XXXX-XXXX")
+    if not sender_email:
+        sender_email = os.environ.get("SMTP_FROM", "email.anda@gmail.com")
+    if not sender_linkedin:
+        sender_linkedin = os.environ.get("SENDER_LINKEDIN", "linkedin.com/in/username")
+    if not sender_github:
+        sender_github = os.environ.get("SENDER_GITHUB", "github.com/username")
     phone_digits = re.sub(r"\D", "", sender_phone)
     # Nomor lokal Indonesia (0xxx) → format internasional (62xxx) agar link
     # wa.me benar, mis. 0822… → https://wa.me/6282…
     if phone_digits.startswith("0"):
         phone_digits = "62" + phone_digits[1:]
     wa_link = f"https://wa.me/{phone_digits}" if phone_digits else "#"
-    linkedin_url = "https://sub-genome-antivirus-survivors.trycloudflare.com"
+    linkedin_url = ("https://" + sender_linkedin.removeprefix("https://")) if sender_linkedin else "#"
     github_url = ("https://" + sender_github.removeprefix("https://")) if sender_github else "#"
     return {
         "greeting": random.choice(GREETING_VARIANTS),
@@ -459,10 +469,23 @@ def _build_default_variants(
 
 
 def build_variants(
-    company: str, position: str, sender_name: Optional[str] = None
+    company: str,
+    position: str,
+    sender_name: Optional[str] = None,
+    sender_phone: Optional[str] = None,
+    sender_email: Optional[str] = None,
+    sender_linkedin: Optional[str] = None,
+    sender_github: Optional[str] = None,
 ) -> dict[str, str]:
     """Public helper: satu set variabel acak untuk preview/email."""
-    return _build_default_variants(company, position, sender_name=sender_name)
+    return _build_default_variants(
+        company, position,
+        sender_name=sender_name,
+        sender_phone=sender_phone,
+        sender_email=sender_email,
+        sender_linkedin=sender_linkedin,
+        sender_github=sender_github,
+    )
 
 
 def render_body(
@@ -474,6 +497,10 @@ def render_body(
     plain: bool = False,
     experience: Optional[str] = None,
     sender_name: Optional[str] = None,
+    sender_phone: Optional[str] = None,
+    sender_email: Optional[str] = None,
+    sender_linkedin: Optional[str] = None,
+    sender_github: Optional[str] = None,
 ) -> str:
     from database import get_template_by_name
 
@@ -492,32 +519,35 @@ def render_body(
         custom = get_setting(f"template_{template_name}")
         tpl = custom if custom else get_template(template_name)
 
-    # 'extra' adalah teks biasa — escape di HTML agar tidak bisa menyelipkan
-    # HTML/script ke email maupun merusak halaman preview.
-    if extra:
-        extra_text = f" {html.escape(extra)}" if (template_name != "plain" and not plain) else f" {extra}"
-    else:
-        extra_text = ""
+    # 'extra' adalah teks biasa — escape di versi HTML agar tidak bisa menyelipkan
+    # HTML/script ke email maupun merusak halaman preview. Versi plain mentah
+    # (teks polos memang tidak punya konteks HTML).
+    extra_text = (f" {html.escape(extra)}" if extra and not plain else (f" {extra}" if extra else ""))
 
     # Paragraf "Pengalaman & Keahlian": kalau diisi → custom, kalau kosong
     # → pakai default. Untuk versi HTML, escape agar angka/karakter aman.
     experience_text = experience.strip() if experience and experience.strip() else EXPERIENCE_DEFAULT
-    if plain:
-        experience_text = experience_text
-    else:
+    if not plain:
         experience_text = html.escape(experience_text)
 
     # Variabel variant (greeting/opening/closing/sender_*) selalu disuntik untuk
     # SEMUA template — kwarg yang tidak dipakai oleh .format() otomatis diabaikan,
     # jadi aman untuk template kustom yang hanya memakai {company}/{position}/{extra}.
+    _contact_kw = dict(
+        sender_name=sender_name,
+        sender_phone=sender_phone,
+        sender_email=sender_email,
+        sender_linkedin=sender_linkedin,
+        sender_github=sender_github,
+    )
     if variants is None:
-        variants = _build_default_variants(company, position, sender_name=sender_name)
+        variants = _build_default_variants(company, position, **_contact_kw)
     else:
         # Variants parsial (mis. dari pemanggil eksternal): lengkapi dengan default
         # supaya placeholder variant apa pun tetap tersubstitusi. Kunci yang
         # bentrok dengan argumen .format() (company/position/extra) dibuang agar
         # tidak memicu TypeError 'got multiple values'.
-        merged = _build_default_variants(company, position, sender_name=sender_name)
+        merged = _build_default_variants(company, position, **_contact_kw)
         merged.update(variants)
         for k in ("company", "position", "extra"):
             merged.pop(k, None)
@@ -526,8 +556,31 @@ def render_body(
     variants["experience"] = experience_text
     if sender_name:
         variants["sender_name"] = sender_name
+
+    # ANTI-INJEKSI versi HTML: semua nilai dari pengguna (kontak custom, nama,
+    # greeting/opening/closing yang menampung company/position/sender_name, serta
+    # URL turunan linkedin/github) di-escape agar tidak bisa memecah atribut
+    # href / menyisipkan tag — konten itu bisa masuk lewat form maupun CSV batch.
+    # Versi plain tetap mentah. Dict disalin supaya pemanggil (build_email render
+    # plain dulu baru HTML dengan objek variants yang sama) tidak mendapat versi
+    # yang sudah di-escape.
+    if not plain:
+        variants = dict(variants)
+        for k in (
+            "sender_name", "sender_phone", "sender_email",
+            "sender_linkedin", "sender_github",
+            "wa_link", "linkedin_url", "github_url",
+            "greeting", "opening", "closing",
+        ):
+            if variants.get(k):
+                variants[k] = html.escape(variants[k])
     try:
-        return tpl.format(company=company, position=position, extra=extra_text, **variants)
+        return tpl.format(
+            company=company if plain else html.escape(company),
+            position=position if plain else html.escape(position),
+            extra=extra_text,
+            **variants,
+        )
     except KeyError as e:
         raise ValueError(
             f"Template menggunakan variabel {e} yang tidak dikenal. "
@@ -548,10 +601,21 @@ def build_email(
     additional_attachments: Optional[list[str]] = None,
     experience: Optional[str] = None,
     sender_name: Optional[str] = None,
+    sender_phone: Optional[str] = None,
+    sender_email: Optional[str] = None,
+    sender_linkedin: Optional[str] = None,
+    sender_github: Optional[str] = None,
 ) -> tuple[MIMEMultipart, str, str]:
-    variants = _build_default_variants(company, position, sender_name=sender_name)
-    plain_body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name)
-    html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name)
+    variants = _build_default_variants(
+        company, position,
+        sender_name=sender_name,
+        sender_phone=sender_phone,
+        sender_email=sender_email,
+        sender_linkedin=sender_linkedin,
+        sender_github=sender_github,
+    )
+    plain_body = render_body(company, position, extra, template_name, variants=variants, plain=True, experience=experience, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
+    html_body = render_body(company, position, extra, template_name, variants=variants, experience=experience, sender_name=sender_name, sender_phone=sender_phone, sender_email=sender_email, sender_linkedin=sender_linkedin, sender_github=sender_github)
 
     cv_file = Path(cv_path)
     if not cv_file.exists():
